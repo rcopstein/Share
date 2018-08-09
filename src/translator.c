@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "translator.h"
+
 #define TRANSLATOR_LOAD_SUCCESS 0
 #define TRANSLATOR_LOAD_FAILURE 1
 
@@ -29,7 +31,7 @@ static char* trim_string(char* string) {
 // Allocates a treenode with a given name
 static treenode* create_treenode(char* path) {
     treenode* node = (treenode*) calloc(1, sizeof(treenode));
-    node->segment = (char*) calloc(1, sizeof(char) * strlen(path));
+    node->segment = (char*) malloc(sizeof(char) * strlen(path));
     strcpy(node->segment, path);
     return node;
 }
@@ -52,7 +54,7 @@ uint8_t translator_load(const char* source_file) {
         uint8_t level = (uint8_t)(trimmed - buffer);
 
         if ((buffer + level)[0] == ':') {
-            stack[stack_ptr]->path = calloc(1, strlen(buffer));
+            stack[stack_ptr]->path = malloc(strlen(buffer) * sizeof(char));
             strcpy(stack[stack_ptr]->path, buffer + level + 1);
         } else {
             treenode* node = create_treenode(buffer + level);
@@ -83,6 +85,8 @@ void translator_unload(treenode* node) {
     if (node == NULL) return;
     translator_unload(node->child);
     translator_unload(node->next);
+    free(node->segment);
+    free(node->path);
     free(node);
 }
 
@@ -98,23 +102,23 @@ char* translator_find(char* path) {
 
     while (token) {
         while (strcmp(aux->segment, token) != 0 && aux != NULL) {
-            printf("Token is: %s, Segment is: %s\n", token, aux->segment);
+            // printf("Token is: %s, Segment is: %s\n", token, aux->segment);
             aux = aux->next;
         }
         if (aux == NULL) return NULL;
 
-        printf("Found segment: %s\n", aux->segment);
-        result = aux->path;
-        aux = aux->child;
+        // printf("Found segment: %s\n", aux->segment);
 
         token = strtok(NULL, delimiter);
+        result = aux->path;
+        aux = aux->child;
     }
 
     return result;
 }
 
 // Print the path tree
-void print_treenode(treenode* node, uint8_t lvl) {
+static void print_treenode(treenode* node, uint8_t lvl) {
     if (node == NULL) return;
     for (uint8_t i = 0; i < lvl; ++i) printf("\t");
     printf("%s\n", node->segment);
@@ -122,7 +126,8 @@ void print_treenode(treenode* node, uint8_t lvl) {
     print_treenode(node->next, lvl);
 }
 
-int main() {
+int maino(int argc, char** argv) {
+
     uint8_t result = translator_load("../../sample.txt");
     if (result == TRANSLATOR_LOAD_FAILURE) return 1;
 
@@ -130,7 +135,7 @@ int main() {
 
     char  str[50] = "My Folder 1/My File 1.1";
     char* res = translator_find(str);
-    printf("%s\n", res);
+    printf("\n%s\n", res);
 
     return 0;
 }

@@ -12,6 +12,9 @@ set(CMAKE_C_STANDARD 99)
 
 find_package(FUSE REQUIRED)
 
-add_executable(Share translator.c)
+include_directories("${CMAKE_SOURCE_DIR}/include")
+file(GLOB SOURCES "src/*.c")
+
+add_executable(Share ${SOURCES})
 include_directories(${FUSE_INCLUDE_DIR})
 target_link_libraries(Share ${FUSE_LIBRARIES})
