@@ -1,3 +1,7 @@
+//
+// Standard Output Module
+//
+
 #include <stdio.h>
 
 #include "output.h"
@@ -18,7 +22,9 @@ int warning(char* comment, void* param) {
     return 0;
 }
 
-int error(char* comment) {
-    printf(RED "%s" NRM "\n", comment);
+int error(char* comment, void* param) {
+    printf(RED);
+    printf(comment, param);
+    printf(NRM "\n");
     return 1;
 }
