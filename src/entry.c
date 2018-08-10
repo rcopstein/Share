@@ -37,6 +37,9 @@ int usage() {
 
 int create(char* name, char* description, char* ip, uint16_t port, char* path) {
 
+    // TO-DO: Check if path exists before doing anything
+    // TO-DO: Check a way to create files without sudo
+
     char* base;
     char* baseDir;
     char buffer[256];
@@ -54,7 +57,7 @@ int create(char* name, char* description, char* ip, uint16_t port, char* path) {
     // Create the metadata files
     strcpy(baseDir, METADATA_MEMBERS);
     FILE* members = fops_make_file(buffer);
-    printf("Created members file: !\n", buffer);
+    printf("Created members file: %s!\n", buffer);
 
     strcpy(baseDir, METADATA_HIERARCHY);
     FILE* hierarchy = fops_make_file(buffer);
@@ -77,6 +80,8 @@ int create(char* name, char* description, char* ip, uint16_t port, char* path) {
     // Close resources
     fclose(hierarchy);
     fclose(members);
+
+    return 0;
 }
 
 int parse_create(int argc, char** argv) {
