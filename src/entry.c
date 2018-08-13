@@ -201,14 +201,40 @@ int parse_create(int argc, char** argv) {
 
 member* members = NULL;
 
-int proto_join(int server_socket, int client_socket) {
+int send_message(char* ip, uint16_t port, void* message, size_t size) {
+
+    int sock;
+    struct sockaddr_in addr;
+
+    sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) return error("Failed to create socket!\n", NULL);
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(ip);
+
+    if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)))
+        return error("Failed to connect to socket!\n", NULL);
+
+    if (send(sock, message, size, 0) != size) {
+        error("Failed to send message!", NULL);
+        close(sock);
+        return 1;
+    }
+
+    close(sock);
+    return 0;
+
+}
+
+int proto_join(int sock) {
 
     char ip[16];
     char buffer[256];
     uint16_t port = 4000;
 
     // Receive IP and PORT
-    if (recv(client_socket, buffer, 21, 0) != 21)
+    if (recv(sock, buffer, 21, 0) != 21)
         return error("Failed to receive message! Incomplete join protocol!", NULL);
 
     // Parse received data
@@ -229,11 +255,11 @@ int proto_join(int server_socket, int client_socket) {
     }
 
     // Send ID
-    if (send(client_socket, &id, 2, 0) != 2)
+    if (send(sock, &id, 2, 0) != 2)
         return error("Failed to send id! Incomplete join protocol!", NULL);
 
     // Send Members Count
-    if (send(client_socket, &count, 2, 0) != 2)
+    if (send(sock, &count, 2, 0) != 2)
         return error("Failed to send count! Incomplete join protocol!", NULL);
 
     // Send Members Entries
@@ -242,19 +268,65 @@ int proto_join(int server_socket, int client_socket) {
         sprintf(buffer, "%d %s %d", aux->id, aux->ip, aux->port);
         printf("%s\n", buffer);
 
-        if (send(client_socket, &buffer, 21, 0) != 21)
+        if (send(sock, &buffer, 21, 0) != 21)
             return error("Failed to send a member! Incomplete join protocol!", NULL);
 
         aux = aux->next;
     }
 
     // Receive confirmation
-    if (recv(client_socket, buffer, 2, 0) != 2)
+    if (recv(sock, buffer, 2, 0) != 2)
         return error("Failed to receive confirmation! Incomplete join protocol!", NULL);
 
     printf("Received confirmation!\n");
 
+    // Broadcast to every other machine
+    char message[256];
+    sprintf(message, "addm%d %s %d", id, ip, port);
+
+    aux = members;
+    while (aux != NULL) {
+        send_message(aux->ip, aux->port, message, 21);
+        aux = aux->next;
+    }
+
     return 0;
+}
+
+int proto_addm(int sock) {
+
+    char ip[16];
+    uint16_t id = 0;
+    char buffer[256];
+    uint16_t port = 4000;
+
+    ip[0] = '\0';
+
+    // Receive the data
+    if (recv(sock, &buffer, 21, 0) < 0) {
+        printf("%s\n", buffer);
+        return error("Failed to read 'addm' data!\n", NULL);
+    }
+
+    printf("Addm: %s\n", buffer);
+
+    // Parse the input
+    char* token = strtok(buffer, " ");
+    id = atoi(token);
+
+    token = strtok(NULL, " ");
+    strncpy(ip, token, 15);
+
+    token = strtok(NULL, " ");
+    if (token != NULL) port = atoi(token);
+
+    // Check values
+    if (ip[0] == 0 || id == 0)
+        return error("Invalid parameters for 'addm'", NULL);
+
+    // Add member to metadata
+    return metadata_append_member(id, ip, port);
+
 }
 
 int up(bool foreground) {
@@ -290,7 +362,7 @@ int up(bool foreground) {
         return error("Failed to bind socket!\n", NULL);
 
     // Listen
-    listen(socket_desc, 3);
+    listen(socket_desc, 10);
     printf("Waiting for incoming connections!\n");
 
     // Accept incoming connections
@@ -308,7 +380,8 @@ int up(bool foreground) {
         printf("> %s\n", buffer);
 
         // Check the protocol
-        if (strcmp(buffer, "join") == 0) proto_join(socket_desc, client_sock);
+        if (strcmp(buffer, "join") == 0) proto_join(client_sock);
+        else if (strcmp(buffer, "addm") == 0) proto_addm(client_sock);
 
         // Close the client socket
         close(client_sock);
@@ -388,14 +461,14 @@ int join(char* ip, uint16_t port) {
     printf("Received ID: %d\n", aux);
 
     // Create metadata
-    if (metadata_initialize()) {
+    /*if (metadata_initialize()) {
         error("Failed to create metadata files!\n", NULL);
         return clean_join(client_sock);
     }
     if (metadata_append_member(aux, "127.0.0.1", 5000)) {
         error("Failed to append member!\n", NULL);
         return clean_join(client_sock);
-    }
+    }*/
 
     // Receive number of members
     if (recv(client_sock, &aux, 2, 0) != 2) {
@@ -426,7 +499,7 @@ int join(char* ip, uint16_t port) {
         _port = atoi(token);
 
         printf("Added member %d %s %d\n", _id, _ip, _port);
-        metadata_append_member(_id, _ip, _port);
+        //metadata_append_member(_id, _ip, _port);
     }
 
     // Send acknowledgement
