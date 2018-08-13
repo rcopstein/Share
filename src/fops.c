@@ -29,26 +29,35 @@ static int fops_handle_error(int err) {
             return error("Permission Denied...\n", NULL);
 
         default:
-            return error("Fatal error %d...\n", err);
+            return error("Fatal error %d...\n", &err);
     }
-
-    return 1;
 }
 
 int fops_make_dir(const char* dirname) {
     struct stat st = {0};
     int res = stat(dirname, &st);
+    printf("Attempting to create %s\n", dirname);
 
-    if (res == 0) return 1; // Directory exists
-    if (errno != ENOENT) return 1; // Unknown error
+    if (res == 0) { printf("Directory exists!\n"); return 1; } // Directory exists
+    if (errno != ENOENT) { printf("Error: %d\n", errno); return 1; } // Unknown error
 
     if (mkdir(dirname, 0700) == 0) return 0;
+    printf("Error 2: %d\n", errno);
+    return 1;
+}
+
+int fops_remove_dir(const char* dirname) {
+    if(rmdir(dirname) == 0) return 0;
     return 1;
 }
 
 FILE* fops_make_file(const char* filename) {
     FILE* file = fopen(filename, "w");
     return file;
+}
+
+int fops_remove_file(const char* filename) {
+    return remove(filename);
 }
 
 int fops_append_line(const char* filename, const char* line) {
@@ -99,7 +108,7 @@ int fops_delete_line(const char* filename, const char* line) {
     return 0;
 }
 
-int fops_delete_line_starts(const char* filename, const char* line) {
+int fops_delete_line_starts_with(const char* filename, const char* line) {
     char *buf;
     int result;
     size_t size;

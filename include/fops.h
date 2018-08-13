@@ -4,7 +4,11 @@
 
 int fops_make_dir(const char* dirname);
 
+int fops_remove_dir(const char* dirname);
+
 FILE* fops_make_file(const char* filename);
+
+int fops_remove_file(const char* filename);
 
 int fops_append_line(const char* filename, const char* line);
 
