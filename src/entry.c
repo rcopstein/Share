@@ -335,7 +335,7 @@ int up(bool foreground) {
     if (!foreground && fork() != 0) return 0;
 
     // Read members into memory
-    members = parse_members((char*)METADATA_MEMBERS);
+    members = read_members((char *) METADATA_MEMBERS);
     if (members == NULL) return error("Failed to read members file!\n", NULL);
 
     member* aux = members;

@@ -6,7 +6,19 @@
 #include "members.h"
 #include "output.h"
 
-member* parse_members(char *path) {
+member parse_member(char* input) {
+
+    // Read a line and build a 'member' struct
+
+}
+
+void print_member(member* param, char* buffer) {
+
+    // Print a member to a string (assume buffer is big enough)
+
+}
+
+member* read_members(char* path) {
 
     member m;
     m.next = NULL;
@@ -40,4 +52,10 @@ member* parse_members(char *path) {
     }
 
     return m.next;
+}
+
+member build_member(uint16_t id, char* ip, uint16_t port) {
+
+    // Build a member struct based on the parameters (Assume ip is decently sized)
+
 }
