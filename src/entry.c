@@ -14,6 +14,7 @@
 
 #include "fops.h"
 #include "output.h"
+#include "members.h"
 
 const char METADATA_DIR[] = "/metadata/";
 const char METADATA_MEMBERS[] = "/members.txt";
@@ -117,7 +118,7 @@ int create(char* name, char* description, char* ip, uint16_t port, char* path) {
     printf("Created the hierarchy file\n");
 
     // Write first members entry
-    int result = fprintf(members, "  ID              IP    SIZE (MB)   USAGE (MB)\n%4d %15s %12d %12d\n", 1, ip, 0, 0);
+    int result = fprintf(members, "%d %s %d %d %d\n", 1, ip, port, 0, 0);
     if (result < 0)
         return clean_create(3, metadata_dir, members_file, hierarchy_file, NULL);
     printf("Added member entry\n");
@@ -203,6 +204,41 @@ int parse_create(int argc, char** argv) {
 }
 
 // Up
+member* members = NULL;
+
+int proto_join(int server_socket, int client_socket) {
+
+    char ip[16];
+    char buffer[256];
+    uint16_t port = 4000;
+
+    // Receive IP and PORT
+    if (recv(client_socket, buffer, 21, 0) != 21) {
+        return error("Failed to receive message! Incomplete join protocol!", NULL);
+    }
+
+    // Parse received data
+    char* token = strtok(buffer, ":");
+    strncpy(ip, token, 15);
+
+    token = strtok(NULL, ":");
+    if (token != NULL) port = atoi(token);
+
+    // Determine an IP
+    uint16_t id = 2;
+    member* aux = members;
+    while (aux != NULL) {
+        if (aux->id >= id) id = (uint16_t)(aux->id + 1);
+        aux = aux->next;
+    }
+
+    // Send IP
+    if (send(client_socket, &id, 2, 0) != 2) {
+        return error("Failed to send id! Incomplete join protocol!", NULL);
+    }
+
+    return 0;
+}
 
 int up(bool foreground) {
 
@@ -211,12 +247,24 @@ int up(bool foreground) {
     // Go into background
     if (!foreground && fork() != 0) return 0;
 
+    // Read members into memory
+    char path[25];
+    strcpy(path, "./");
+    strcat(path, METADATA_DIR);
+    strcat(path, METADATA_MEMBERS);
+    members = parse_members(path);
+
+    if (members == NULL) return error("Failed to read members file!\n", NULL);
+
+    member* aux = members;
+    while (aux != NULL) { printf("%s:%d\n", aux->ip, aux->port); aux = aux->next; }
+
     // Declare variables
     char buffer[2000];
     ssize_t read_size;
-    socklen_t socket_size;
     int socket_desc, client_sock;
     struct sockaddr_in server, client;
+    socklen_t socket_size = sizeof(struct sockaddr_in);
 
     // Create Socket
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -236,21 +284,28 @@ int up(bool foreground) {
     printf("Waiting for incoming connections!\n");
 
     // Accept incoming connections
-    socket_size = sizeof(struct sockaddr_in);
-    client_sock = accept(socket_desc, (struct sockaddr*)&client, &socket_size);
-    printf("Client Socket: %d\n", client_sock);
+    while (1) {
 
-    if (client_sock < 0) return error("Failed to accept connection\n", NULL);
-    else printf("Accepted a connection!\n");
+        client_sock = accept(socket_desc, (struct sockaddr*)&client, &socket_size);
+        printf("Client Socket: %d\n", client_sock);
 
-    // Read the content
-    while ((read_size = recv(client_sock, buffer, 2000, 0)) > 0) {
+        if (client_sock < 0) { error("Failed to accept connection\n", NULL); continue; }
+        else printf("Accepted a connection!\n");
+
+        // Read the protocol operation
+        read_size = recv(client_sock, buffer, 4, 0);
+        buffer[4] = '\0';
         printf("> %s\n", buffer);
+
+        // Check the protocol
+        if (strcmp(buffer, "join") == 0) proto_join(socket_desc, client_sock);
+
+        // Close the client socket
+        close(client_sock);
     }
 
     // Close the socket
     close(socket_desc);
-
     return 0;
 }
 
@@ -271,6 +326,74 @@ int parse_up(int argc, char** argv) {
     return up(foreground);
 }
 
+// Join
+
+int join(char* ip, uint16_t port) {
+
+    // Declare variables
+    int client_sock;
+    struct sockaddr_in server_addr;
+
+    // Initialize socket
+    client_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (client_sock < 0) return error("Failed to create socket\n", NULL);
+
+    // Initialize server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(ip);
+
+    // Connect to server
+    int result = connect(client_sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (result < 0) return error("Failed to connect to server\n", NULL);
+
+    // Create message
+    char message[] = "join127.0.0.1:5000";
+    size_t size = 25; // Join = 4, IP = 15, :, Port = 5
+
+    // Send messages
+    if (send(client_sock, message, size, 0) != size)
+        return error("Message was sent with wrong number of bytes!\n", NULL);
+
+    // Receive ID
+    uint16_t id;
+    if (recv(client_sock, &id, 2, 0) != 2)
+        return error("Failed to receive correctly sized message!\n", NULL);
+
+    printf("Received ID: %d\n", id);
+
+    close(client_sock);
+    return 0;
+}
+
+int parse_join(int argc, char** argv) {
+
+    // Declare arguments
+    char ip[16];
+    uint16_t port = 4000;
+
+    // Initialize Arguments
+    ip[0] = '\0';
+
+    // Read arguments
+    printf("Arg: %s\n", argv[0]);
+
+    char* tok = strtok(argv[0], ":");
+    printf("%s\n", tok);
+    strncpy(ip, tok, 15);
+
+    tok = strtok(NULL, ":");
+    if (tok != NULL) port = (uint16_t) atoi(tok);
+
+    // Check required arguments
+    if (ip[0] == '\0') return error("Failed to parse ip\n", NULL);
+
+    warning("The ip is %s\n", ip);
+    printf("The port is %d\n", port);
+
+    return join(ip, port);
+}
+
 // Main
 
 int main(int argc, char** argv) {
@@ -283,7 +406,7 @@ int main(int argc, char** argv) {
 
     if (strcmp(command, "create") == 0) return parse_create(argc - 2, argv + 2);
     else if (strcmp(command, "up") == 0) return parse_up(argc - 2, argv + 2);
-    else if (strcmp(command, "join") == 0) {}
+    else if (strcmp(command, "join") == 0) return parse_join(argc - 2, argv + 2);
     else if (strcmp(command, "mount") == 0) {}
     else if (strcmp(command, "remove") == 0) {}
     else return error("Unknown command '%s'\n", command);
