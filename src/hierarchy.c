@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "translator.h"
+#include "hierarchy.h"
 
 #define TRANSLATOR_LOAD_SUCCESS 0
 #define TRANSLATOR_LOAD_FAILURE 1
@@ -33,11 +33,21 @@ static treenode* create_treenode(char* path) {
     treenode* node = (treenode*) calloc(1, sizeof(treenode));
     node->segment = (char*) malloc(sizeof(char) * strlen(path));
     strcpy(node->segment, path);
+    node->path = NULL;
     return node;
 }
 
+// Print the path tree
+static void print_treenode(treenode* node, uint8_t lvl) {
+    if (node == NULL) return;
+    for (uint8_t i = 0; i < lvl; ++i) printf("\t");
+    printf("%s\n", node->segment);
+    print_treenode(node->child, (uint8_t)(lvl + 1));
+    print_treenode(node->next, lvl);
+}
+
 // Loads the path tree from a file
-uint8_t translator_load(const char* source_file) {
+uint8_t hierarchy_load(const char *source_file) {
     FILE* source = fopen(source_file, "r");
     if (!source) return TRANSLATOR_LOAD_FAILURE;
 
@@ -54,8 +64,12 @@ uint8_t translator_load(const char* source_file) {
         uint8_t level = (uint8_t)(trimmed - buffer);
 
         if ((buffer + level)[0] == ':') {
+
             stack[stack_ptr]->path = malloc(strlen(buffer) * sizeof(char));
             strcpy(stack[stack_ptr]->path, buffer + level + 1);
+
+            printf("File: %s, Path: %s\n", stack[stack_ptr]->segment, stack[stack_ptr]->path);
+
         } else {
             treenode* node = create_treenode(buffer + level);
 
@@ -76,32 +90,40 @@ uint8_t translator_load(const char* source_file) {
         }
     }
 
+    //print_treenode(root.child, 0);
+
     fclose(source);
     return TRANSLATOR_LOAD_SUCCESS;
 }
 
 // Unloads the path tree
-void translator_unload(treenode* node) {
+void hierarchy_unload(treenode *node) {
     if (node == NULL) return;
-    translator_unload(node->child);
-    translator_unload(node->next);
+    hierarchy_unload(node->child);
+    hierarchy_unload(node->next);
     free(node->segment);
     free(node->path);
     free(node);
 }
 
 // Find a path in the path tree
-char* translator_find(char* path) {
+char* hierarchy_translate(const char* _path) {
+
+    char path[256];
+    strncpy(path, _path, 255);
+
+    printf("Translating: %s\n", path);
+
     const char delimiter[2] = "/";
 
     treenode* aux = root.child;
     char* result = NULL;
 
     char* token = strtok(path, delimiter);
-    printf("%s\n", token);
+    //printf("%s\n", token);
 
     while (token) {
-        while (strcmp(aux->segment, token) != 0 && aux != NULL) {
+        while (aux != NULL && strcmp(aux->segment, token) != 0) {
             // printf("Token is: %s, Segment is: %s\n", token, aux->segment);
             aux = aux->next;
         }
@@ -117,25 +139,43 @@ char* translator_find(char* path) {
     return result;
 }
 
-// Print the path tree
-static void print_treenode(treenode* node, uint8_t lvl) {
-    if (node == NULL) return;
-    for (uint8_t i = 0; i < lvl; ++i) printf("\t");
-    printf("%s\n", node->segment);
-    print_treenode(node->child, (uint8_t)(lvl + 1));
-    print_treenode(node->next, lvl);
-}
+// Load the file nodes in a path
+FileNode* hierarchy_list(const char* _path) {
 
-int maino(int argc, char** argv) {
+    char path[256];
+    strncpy(path, _path, 255);
 
-    uint8_t result = translator_load("../../sample.txt");
-    if (result == TRANSLATOR_LOAD_FAILURE) return 1;
+    const char delimiter[2] = "/";
+    treenode* aux = root.child;
 
-    print_treenode(root.child, 0);
+    char* token = strtok((char *)path, delimiter);
 
-    char  str[50] = "My Folder 1/My File 1.1";
-    char* res = translator_find(str);
-    printf("\n%s\n", res);
+    while (token) {
+        while (aux != NULL && strcmp(aux->segment, token) != 0) aux = aux->next;
+        if (aux == NULL) return NULL;
 
-    return 0;
+        token = strtok(NULL, delimiter);
+        aux = aux->child;
+    }
+
+    FileNode* first = NULL;
+    FileNode* src = NULL;
+
+    while (aux != NULL) {
+
+        FileNode* node = (FileNode *) malloc(sizeof(FileNode));
+        strncpy(node->name, aux->segment, 49);
+        node->isDir = aux->path == NULL;
+        node->next = NULL;
+
+        if (src != NULL) src->next = node;
+        else first = node;
+        src = node;
+
+        aux = aux->next;
+
+    }
+
+    return first;
+
 }

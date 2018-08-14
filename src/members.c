@@ -6,18 +6,35 @@
 #include "members.h"
 #include "output.h"
 
+// Read a line and build a 'member' struct
 member parse_member(char* input) {
 
-    // Read a line and build a 'member' struct
+    member result;
+    result.next = NULL;
 
+    // Copy ID
+    char* token = strtok(input, " ");
+    result.id = (uint16_t) strtol(token, NULL, 10);
+
+    // Copy IP
+    token = strtok(NULL, " ");
+    strncpy(result.ip, token, 15);
+
+    // Copy Port
+    token = strtok(NULL, " ");
+    result.port = (uint16_t) strtol(token, NULL, 10);
+
+    return result;
 }
 
+// Print a member to a string (assume buffer is big enough)
 void print_member(member* param, char* buffer) {
 
-    // Print a member to a string (assume buffer is big enough)
+    sprintf(buffer, "%d %s %d %d %d", param->id, param->ip, param->port, 0, 0);
 
 }
 
+// Reads members from the members file
 member* read_members(char* path) {
 
     member m;
@@ -54,8 +71,16 @@ member* read_members(char* path) {
     return m.next;
 }
 
+// Build a member struct based on the parameters (Assume ip is decently sized)
 member build_member(uint16_t id, char* ip, uint16_t port) {
 
-    // Build a member struct based on the parameters (Assume ip is decently sized)
+    member result;
+
+    strncpy(result.ip, ip, 15);
+    result.port = port;
+    result.next = NULL;
+    result.id = id;
+
+    return result;
 
 }

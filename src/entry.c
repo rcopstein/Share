@@ -15,6 +15,8 @@
 #include "fops.h"
 #include "output.h"
 #include "members.h"
+#include "mount.h"
+#include "hierarchy.h"
 
 const char METADATA_DIR[] = "metadata/";
 const char METADATA_MEMBERS[] = "metadata/members.txt";
@@ -65,11 +67,12 @@ uint8_t metadata_initialize() {
 
 }
 
-uint8_t metadata_append_member(uint16_t id, char* ip, uint16_t port) {
+uint8_t metadata_append_member(member param) {
 
     // Append the line
     char line[256];
-    sprintf(line, "%d %s %d %d %d\n", id, ip, port, 0, 0);
+    print_member(&param, line);
+    strcat(line, "\n");
     return (uint8_t) fops_append_line(METADATA_MEMBERS, line);
 
 }
@@ -124,7 +127,8 @@ int create(char* name, char* description, char* ip, uint16_t port) {
     if (result) return clean_create(result, NULL);
 
     // Write first members entry
-    if (metadata_append_member(1, ip, port)) return clean_create(4, NULL);
+    member m = build_member(1, ip, port);
+    if (metadata_append_member(m)) return clean_create(4, NULL);
     printf("Added member entry\n");
 
     // Create the NFS directory
@@ -165,7 +169,7 @@ int parse_create(int argc, char** argv) {
 
             if (strcmp(argv[i] + 1, "p") == 0) {
                 if (++i < argc) {
-                    port = (uint16_t) atoi(argv[i]);
+                    port = (uint16_t) strtol(argv[i], NULL, 10);
                 } else return error("Found flag '-p' but value is missing\n", NULL);
             }
 
@@ -242,7 +246,7 @@ int proto_join(int sock) {
     strncpy(ip, token, 15);
 
     token = strtok(NULL, ":");
-    if (token != NULL) port = atoi(token);
+    if (token != NULL) port = (uint16_t) strtol(token, NULL, 10);
 
     // Determine an ID
     uint16_t count = 0;
@@ -265,7 +269,7 @@ int proto_join(int sock) {
     // Send Members Entries
     aux = members;
     while (aux != NULL) {
-        sprintf(buffer, "%d %s %d", aux->id, aux->ip, aux->port);
+        print_member(aux, buffer);
         printf("%s\n", buffer);
 
         if (send(sock, &buffer, 21, 0) != 21)
@@ -282,7 +286,9 @@ int proto_join(int sock) {
 
     // Broadcast to every other machine
     char message[256];
-    sprintf(message, "addm%d %s %d", id, ip, port);
+    member m = build_member(id, ip, port);
+    print_member(&m, message + 4);
+    sprintf(message, "addm");
 
     aux = members;
     while (aux != NULL) {
@@ -312,21 +318,40 @@ int proto_addm(int sock) {
 
     // Parse the input
     char* token = strtok(buffer, " ");
-    id = atoi(token);
+    id = (uint16_t) strtol(token, NULL, 10);
 
     token = strtok(NULL, " ");
     strncpy(ip, token, 15);
 
     token = strtok(NULL, " ");
-    if (token != NULL) port = atoi(token);
+    if (token != NULL) port = (uint16_t) strtol(token, NULL, 10);
 
     // Check values
     if (ip[0] == 0 || id == 0)
         return error("Invalid parameters for 'addm'", NULL);
 
     // Add member to metadata
-    return metadata_append_member(id, ip, port);
+    member m = build_member(id, ip, port);
+    return metadata_append_member(m);
 
+}
+
+int proto_remm(int sock) {
+
+    char buffer[25];
+
+    // Read the id of the machine
+    if (recv(sock, &buffer, 25, 0) < 0)
+        return error("Failed to read machine ID!\n", NULL);
+
+    printf("Removing machine %s!\n", buffer);
+    uint16_t id = (uint16_t) strtol(buffer, NULL, 10);
+
+    // Remove machine from the file
+    sprintf(buffer, "%d ", id);
+    fops_delete_line_starts_with(METADATA_MEMBERS, buffer);
+
+    return 0;
 }
 
 int up(bool foreground) {
@@ -354,7 +379,7 @@ int up(bool foreground) {
 
     // Prepare Server Address
     server.sin_family = AF_INET;
-    server.sin_port = htons( 4000 );
+    server.sin_port = htons( members->port );
     server.sin_addr.s_addr = INADDR_ANY;
 
     // Bind Server Socket
@@ -382,6 +407,7 @@ int up(bool foreground) {
         // Check the protocol
         if (strcmp(buffer, "join") == 0) proto_join(client_sock);
         else if (strcmp(buffer, "addm") == 0) proto_addm(client_sock);
+        else if (strcmp(buffer, "remm") == 0) proto_remm(client_sock);
 
         // Close the client socket
         close(client_sock);
@@ -414,7 +440,6 @@ int parse_up(int argc, char** argv) {
 int clean_join(int socket) {
 
     close(socket);
-
     return 1;
 
 }
@@ -461,14 +486,15 @@ int join(char* ip, uint16_t port) {
     printf("Received ID: %d\n", aux);
 
     // Create metadata
-    /*if (metadata_initialize()) {
+    if (metadata_initialize()) {
         error("Failed to create metadata files!\n", NULL);
         return clean_join(client_sock);
     }
-    if (metadata_append_member(aux, "127.0.0.1", 5000)) {
+    member m = build_member(aux, "127.0.0.1", 5000);
+    if (metadata_append_member(m)) {
         error("Failed to append member!\n", NULL);
         return clean_join(client_sock);
-    }*/
+    }
 
     // Receive number of members
     if (recv(client_sock, &aux, 2, 0) != 2) {
@@ -478,9 +504,6 @@ int join(char* ip, uint16_t port) {
     printf("$ of Members: %d\n", aux);
 
     // Read all members
-    uint16_t _id;
-    char _ip[16];
-    uint16_t _port;
     char buffer[21];
 
     while (aux--) {
@@ -489,17 +512,8 @@ int join(char* ip, uint16_t port) {
             return clean_join(client_sock);
         }
 
-        char* token = strtok(buffer, " ");
-        _id = atoi(token);
-
-        token = strtok(NULL, " ");
-        strncpy(_ip, token, 15);
-
-        token = strtok(NULL, " ");
-        _port = atoi(token);
-
-        printf("Added member %d %s %d\n", _id, _ip, _port);
-        //metadata_append_member(_id, _ip, _port);
+        m = parse_member(buffer);
+        metadata_append_member(m);
     }
 
     // Send acknowledgement
@@ -529,7 +543,7 @@ int parse_join(int argc, char** argv) {
     strncpy(ip, tok, 15);
 
     tok = strtok(NULL, ":");
-    if (tok != NULL) port = (uint16_t) atoi(tok);
+    if (tok != NULL) port = (uint16_t) (uint16_t) strtol(tok, NULL, 10);
 
     // Check required arguments
     if (ip[0] == '\0') return error("Failed to parse ip\n", NULL);
@@ -538,6 +552,64 @@ int parse_join(int argc, char** argv) {
     printf("The port is %d\n", port);
 
     return join(ip, port);
+}
+
+// Mount
+
+int mount(char* path) {
+
+    // Load hierarchy
+    hierarchy_load(METADATA_HIERARCHY);
+
+    // Create a list of char*
+    char** list = malloc(sizeof(char*) * 2);
+
+    // First pointer is ignored, Second pointer is the path
+    list[0] = list[1] = path;
+
+    // Call mount
+    mount_dir(2, list);
+    return 0;
+}
+
+int parse_mount(int argc, char** argv) {
+
+    if (argc < 1)
+        return error("Missing path!\n", NULL);
+
+    return mount(argv[0]);
+
+}
+
+// Delete
+
+int delete(uint16_t id) {
+
+    // Read members
+    members = read_members((char *)METADATA_MEMBERS);
+    if (members == NULL)
+        return error("Failed to read members file!\n", NULL);
+
+    // Build message
+    char message[25];
+    sprintf(message, "remm%d", id);
+    printf("> %s\n", message);
+
+    // Send removal to all members
+    member* aux = members;
+    while (aux != NULL) {
+        send_message(aux->ip, aux->port, message, 25);
+        aux = aux->next;
+    }
+
+    return 0;
+}
+
+int parse_delete(int argc, char** argv) {
+
+    uint16_t id = (uint16_t) strtol(argv[0], NULL, 10);
+    return delete(id);
+
 }
 
 // Main
@@ -553,8 +625,8 @@ int main(int argc, char** argv) {
     if (strcmp(command, "create") == 0) return parse_create(argc - 2, argv + 2);
     else if (strcmp(command, "up") == 0) return parse_up(argc - 2, argv + 2);
     else if (strcmp(command, "join") == 0) return parse_join(argc - 2, argv + 2);
-    else if (strcmp(command, "mount") == 0) {}
-    else if (strcmp(command, "remove") == 0) {}
+    else if (strcmp(command, "mount") == 0) return parse_mount(argc - 2, argv + 2);
+    else if (strcmp(command, "remove") == 0) return parse_delete(argc - 2, argv + 2);
     else return error("Unknown command '%s'\n", command);
 
     return 0;
