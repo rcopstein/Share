@@ -970,6 +970,8 @@ void mount_dir(int argc, char *argv[])
     mount_uid = getuid();
     mount_gid = getgid();
 
+    printf("Ping!\n");
+
     int res = 0;
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 

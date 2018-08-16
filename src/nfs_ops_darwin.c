@@ -25,7 +25,7 @@ int remove_nfs_dir(char* path) {
     buffer[size] = ' ';
     buffer[size+1] = '\0';
 
-    fops_delete_line(exportsFile, buffer);
+    fops_update_line(exportsFile, buffer, NULL);
 
     return 0;
 
@@ -37,7 +37,7 @@ int add_nfs_recp(char* path, char* recipient) {
     char buffer[1024];
 
     // Get the expected line
-    if (fops_get_line_starts_with((char *)exportsFile, path, buffer, 1023)) {
+    if (fops_read_line((char *)exportsFile, path, buffer, 1023)) {
         // Create a new line
         sprintf(buffer, "%s %s\n", path, recipient);
     } else {
@@ -51,7 +51,7 @@ int add_nfs_recp(char* path, char* recipient) {
     }
 
     // Remove the line
-    if (fops_delete_line_starts_with(exportsFile, path))
+    if (fops_update_line(exportsFile, path, NULL))
         return error("Failed to remove the line from exports\n", NULL);
 
     // Append new line
@@ -67,7 +67,7 @@ int remove_nfs_recp(char* path, char* recipient) {
     char buffer[1024];
 
     // Get expected line
-    if (fops_get_line_starts_with((char*)exportsFile, path, buffer, 1023))
+    if (fops_read_line((char*)exportsFile, path, buffer, 1023))
         return error("Failed to get the line from '%s'\n", (char *) exportsFile);
 
     // Remove the \n from the end
@@ -96,7 +96,7 @@ int remove_nfs_recp(char* path, char* recipient) {
     line[aux] = '\0';
 
     // Remove the line
-    if (fops_delete_line_starts_with(exportsFile, path))
+    if (fops_update_line(exportsFile, path, NULL))
         return error("Failed to remove the line from exports\n", NULL);
 
     // Append new line

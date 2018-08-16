@@ -6,14 +6,10 @@ int fops_make_dir(const char* dirname);
 
 int fops_remove_dir(const char* dirname);
 
-FILE* fops_make_file(const char* filename);
-
-int fops_remove_file(const char* filename);
-
 int fops_append_line(const char* filename, const char* line);
 
-int fops_delete_line(const char* filename, const char* line);
+int fops_remove_line(const char* filename, const char* prefix);
 
-int fops_delete_line_starts_with(const char* filename, const char* line);
+int fops_read_line(const char* filename, const char* prefix, char* buffer, size_t size);
 
-int fops_get_line_starts_with(char* path, const char* line, char* buffer, uint16_t size);
+int fops_update_line(const char* filename, const char* prefix, char* (*funct)(char *line));

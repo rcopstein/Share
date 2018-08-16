@@ -48,13 +48,13 @@ uint8_t metadata_initialize() {
 
     // Create the members file
     FILE* members;
-    if ((members = fops_make_file(METADATA_MEMBERS)) == NULL) return 2;
+    if ((members = fopen(METADATA_MEMBERS, "w+")) == NULL) return 2;
     printf("Created the members file\n");
     fclose(members);
 
     // Create the hierarchy file
     FILE* hierarchy;
-    if ((hierarchy = fops_make_file(METADATA_HIERARCHY)) == NULL) return 3;
+    if ((hierarchy = fopen(METADATA_HIERARCHY, "w+")) == NULL) return 3;
     printf("Created the hierarchy file\n");
     fclose(hierarchy);
 
@@ -78,7 +78,7 @@ int clean_create(uint8_t depth, char* nfs_directory) {
     switch (depth) {
         case 6:
             printf("Removing NFS export entry\n");
-            fops_delete_line_starts_with("/etc/exports", nfs_directory);
+            fops_remove_line("/etc/exports", nfs_directory);
             printf("Updating NFS daemon\n");
             system("sudo nfsd update");
         case 5:
@@ -86,10 +86,10 @@ int clean_create(uint8_t depth, char* nfs_directory) {
             fops_remove_dir(nfs_directory);
         case 4:
             printf("Removing '.logical_hierarchy' file\n");
-            fops_remove_file(METADATA_HIERARCHY);
+            remove(METADATA_HIERARCHY);
         case 3:
             printf("Removing '.members' file\n");
-            fops_remove_file(METADATA_MEMBERS);
+            remove(METADATA_MEMBERS);
         case 2:
             printf("Removing '.share' folder\n");
             fops_remove_dir(METADATA_DIR);
@@ -292,9 +292,7 @@ int proto_join(int sock) {
 int proto_addm(int sock) {
 
     char ip[16];
-    uint16_t id = 0;
     char buffer[256];
-    uint16_t port = 4000;
 
     ip[0] = '\0';
 
@@ -306,24 +304,13 @@ int proto_addm(int sock) {
 
     printf("Addm: %s\n", buffer);
 
-    // Parse the input
-    char* token = strtok(buffer, " ");
-    id = (uint16_t) strtol(token, NULL, 10);
-
-    token = strtok(NULL, " ");
-    strncpy(ip, token, 15);
-
-    token = strtok(NULL, " ");
-    if (token != NULL) port = (uint16_t) strtol(token, NULL, 10);
-
-    // Check values
-    if (ip[0] == 0 || id == 0)
-        return error("Invalid parameters for 'addm'", NULL);
+    // Build the member
+    member m;
+    if (parse_member(buffer, &m))
+        return error("Failed to parse member!\n", NULL);
 
     // Add member to metadata
-    member m = build_member(id, ip, port);
     return metadata_append_member(m);
-
 }
 
 int proto_remm(int sock) {
@@ -339,7 +326,7 @@ int proto_remm(int sock) {
 
     // Remove machine from the file
     sprintf(buffer, "%d ", id);
-    fops_delete_line_starts_with(METADATA_MEMBERS, buffer);
+    fops_remove_line(METADATA_MEMBERS, buffer);
 
     return 0;
 }
@@ -460,7 +447,7 @@ int join(char* ip, uint16_t port) {
 
     // Create message
     char message[] = "join127.0.0.1:5000";
-    size_t size = 25; // Join = 4, IP = 15, :, Port = 5
+    size_t size = strlen(message);
 
     // Send messages
     if (send(client_sock, message, size, 0) != size) {
