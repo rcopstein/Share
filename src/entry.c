@@ -17,6 +17,7 @@
 #include "members.h"
 #include "mount.h"
 #include "hierarchy.h"
+#include "nfs_ops.h"
 
 const char METADATA_DIR[] = "metadata/";
 const char METADATA_MEMBERS[] = "metadata/members.txt";
@@ -140,11 +141,11 @@ int create(char* name, char* description, char* ip, uint16_t port) {
     seteuid(0);
 
     // Modify the NFS exports file
-    if (fops_append_line("/etc/exports", nfs_exports_entry)) return clean_create(5, nfs_dir);
+    if (add_nfs_recp(nfs_dir, "127.0.0.1")) return clean_create(5, nfs_dir);
     printf("Updated the exports file\n");
 
     // Restart NFS service
-    if (system("sudo nfsd update")) return clean_create(6, nfs_dir);
+    if (update_nfs()) return clean_create(6, nfs_dir);
     printf("Updated the NFS service\n");
 
     return 0;
@@ -446,6 +447,8 @@ int clean_join(int socket) {
 
 int join(char* ip, uint16_t port) {
 
+    // TO-DO Determine NFS directory and update entries
+
     // Declare variables
     int client_sock;
     struct sockaddr_in server_addr;
@@ -562,23 +565,21 @@ int mount(char* path) {
     hierarchy_load(METADATA_HIERARCHY);
 
     // Create a list of char*
-    char** list = malloc(sizeof(char*) * 2);
+    char** list = malloc(sizeof(char*) * 3);
+    char foreground[] = "-f";
 
     // First pointer is ignored, Second pointer is the path
     list[0] = list[1] = path;
+    list[2] = foreground;
 
     // Call mount
-    mount_dir(2, list);
+    mount_dir(3, list);
     return 0;
 }
 
 int parse_mount(int argc, char** argv) {
-
-    if (argc < 1)
-        return error("Missing path!\n", NULL);
-
+    if (argc < 1) return error("Missing path!\n", NULL);
     return mount(argv[0]);
-
 }
 
 // Delete
@@ -628,7 +629,5 @@ int main(int argc, char** argv) {
     else if (strcmp(command, "mount") == 0) return parse_mount(argc - 2, argv + 2);
     else if (strcmp(command, "remove") == 0) return parse_delete(argc - 2, argv + 2);
     else return error("Unknown command '%s'\n", command);
-
-    return 0;
 
 }

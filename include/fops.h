@@ -15,3 +15,5 @@ int fops_append_line(const char* filename, const char* line);
 int fops_delete_line(const char* filename, const char* line);
 
 int fops_delete_line_starts_with(const char* filename, const char* line);
+
+int fops_get_line_starts_with(char* path, const char* line, char* buffer, uint16_t size);

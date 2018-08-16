@@ -44,6 +44,7 @@ typedef unsigned long  u_long;
 #define A_KAUTH_FILESEC_XATTR A_PREFIX ".apple.system.Security"
 #define XATTR_APPLE_PREFIX             "com.apple."
 
+// Structs
 struct loopback
 {
     int case_insensitive;
@@ -56,16 +57,25 @@ struct loopback_dirp
     off_t offset;
 };
 
+// Variables
 static struct loopback loopback;
-
 char buffer[256];
 
+uid_t mount_uid;
+gid_t mount_gid;
+
+// Methods
 static int loopback_getattr(const char *_path, struct stat *stbuf)
 {
     const char* path = hierarchy_translate(_path);
 
     int res;
     res = lstat(path, stbuf);
+
+    if (path != NULL && strcmp(path, "/") == 0) {
+        stbuf->st_uid = mount_uid;
+        stbuf->st_gid = mount_gid;
+    }
 
     #if FUSE_VERSION >= 29
         //
@@ -180,7 +190,10 @@ static int loopback_readdir(const char *path,
     FileNode* nodes = hierarchy_list((char *)path);
     FileNode* aux = nodes;
 
-    while (aux != NULL) filler(buf, aux->name, NULL, 0);
+    while (aux != NULL) {
+        filler(buf, aux->name, NULL, 0);
+        aux = aux->next;
+    }
 
     /*
     if ( strcmp( path, "/" ) == 0 ) // If the user is trying to show the files/directories of the root directory show the following
@@ -953,6 +966,9 @@ void mount_dir(int argc, char *argv[])
 
     return;
     */
+
+    mount_uid = getuid();
+    mount_gid = getgid();
 
     int res = 0;
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);

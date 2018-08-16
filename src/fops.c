@@ -147,3 +147,20 @@ int fops_delete_line_starts_with(const char* filename, const char* line) {
 
     return 0;
 }
+
+int fops_get_line_starts_with(char* path, const char* line, char* buffer, uint16_t size) {
+
+    // Open the file
+    FILE* file = fopen(path, "r");
+    if (!file) { error("Failed to open file '%s'\n", path); return NULL; }
+
+    // Read every line
+    while (fgets(buffer, size, file)) {
+        if (startsWith(line, buffer)) {
+            return 0;
+        }
+    }
+
+    return 1;
+
+}

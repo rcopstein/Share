@@ -15,7 +15,7 @@ typedef struct _treenode_ {
     struct _treenode_* next;
     struct _treenode_* child;
 } treenode;
-treenode root = {0};
+treenode root = { "/", "/", NULL, NULL };
 
 // Removes leading spaces and trailing '\n'
 static char* trim_string(char* string) {
@@ -52,14 +52,14 @@ uint8_t hierarchy_load(const char *source_file) {
     if (!source) return TRANSLATOR_LOAD_FAILURE;
 
     int8_t lvl[25];
-    char buffer[51];
+    char buffer[256];
     treenode* stack[25];
     uint8_t stack_ptr = 0;
 
     lvl[0] = -1;
     stack[0] = &root;
 
-    while (fgets(buffer, 50, source)) {
+    while (fgets(buffer, 255, source)) {
         char* trimmed = trim_string(buffer);
         uint8_t level = (uint8_t)(trimmed - buffer);
 
@@ -68,7 +68,7 @@ uint8_t hierarchy_load(const char *source_file) {
             stack[stack_ptr]->path = malloc(strlen(buffer) * sizeof(char));
             strcpy(stack[stack_ptr]->path, buffer + level + 1);
 
-            printf("File: %s, Path: %s\n", stack[stack_ptr]->segment, stack[stack_ptr]->path);
+            //printf("File: %s, Path: %s\n", stack[stack_ptr]->segment, stack[stack_ptr]->path);
 
         } else {
             treenode* node = create_treenode(buffer + level);
@@ -111,30 +111,28 @@ char* hierarchy_translate(const char* _path) {
 
     char path[256];
     strncpy(path, _path, 255);
-
-    printf("Translating: %s\n", path);
-
     const char delimiter[2] = "/";
 
-    treenode* aux = root.child;
     char* result = NULL;
-
+    treenode* aux = root.child;
     char* token = strtok(path, delimiter);
-    //printf("%s\n", token);
 
     while (token) {
         while (aux != NULL && strcmp(aux->segment, token) != 0) {
-            // printf("Token is: %s, Segment is: %s\n", token, aux->segment);
+            //printf("Token is: %s, Segment is: %s\n", token, aux->segment);
             aux = aux->next;
         }
         if (aux == NULL) return NULL;
 
-        // printf("Found segment: %s\n", aux->segment);
+        //printf("Found segment: %s\n", aux->segment);
 
         token = strtok(NULL, delimiter);
         result = aux->path;
         aux = aux->child;
     }
+
+    if (result == NULL) result = (char *) _path;
+    //printf("Translated '%s' to '%s'\n", _path, result);
 
     return result;
 }

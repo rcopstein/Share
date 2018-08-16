@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.10)
-project(Share C)
+cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+project(Share LANGUAGES C)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH})
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall --pedantic -g")
@@ -15,6 +15,6 @@ find_package(FUSE REQUIRED)
 include_directories("${CMAKE_SOURCE_DIR}/include")
 file(GLOB SOURCES "src/*.c")
 
-add_executable(Share ${SOURCES})
+add_executable(share ${SOURCES})
 include_directories(${FUSE_INCLUDE_DIR})
-target_link_libraries(Share ${FUSE_LIBRARIES})
+target_link_libraries(share ${FUSE_LIBRARIES})
