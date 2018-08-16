@@ -15,7 +15,9 @@ typedef struct _member {
 } member;
 
 // Define parsing methods
-member parse_member(char* input);
 member* read_members(char *path);
 void print_member(member* param, char* buffer);
 member build_member(uint16_t id, char* ip, uint16_t port);
+
+int parse_member(char* input, member* container);
+int current_member(char* path, member* container);

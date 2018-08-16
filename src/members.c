@@ -6,25 +6,52 @@
 #include "members.h"
 #include "output.h"
 
-// Read a line and build a 'member' struct
-member parse_member(char* input) {
+// Return the information of the current member
+int current_member(char* path, member* container) {
 
-    member result;
-    result.next = NULL;
+    // Open the members file
+    FILE* file = fopen(path, "r");
+    if (file == NULL) {
+        error("Failed to open the members file!\n", NULL);
+        return 1;
+    }
+
+    // Get the current line
+    char line[256];
+    if (!fgets((char *)line, 255, file)) {
+        error("Failed to read the members file!\n", NULL);
+        fclose(file);
+        return 1;
+    }
+
+    // Return the parsed member
+    parse_member(line, container);
+
+    return 0;
+
+}
+
+// Read a line and build a 'member' struct
+int parse_member(char* input, member* container) {
+
+    container->next = NULL;
 
     // Copy ID
     char* token = strtok(input, " ");
-    result.id = (uint16_t) strtol(token, NULL, 10);
+    if (token == NULL) return error("Failed to parse member from input!\n", NULL);
+    container->id = (uint16_t) strtol(token, NULL, 10);
 
     // Copy IP
     token = strtok(NULL, " ");
-    strncpy(result.ip, token, 15);
+    if (token == NULL) return error("Failed to parse member from input!\n", NULL);
+    strncpy(container->ip, token, 15);
 
     // Copy Port
     token = strtok(NULL, " ");
-    result.port = (uint16_t) strtol(token, NULL, 10);
+    if (token == NULL) return error("Failed to parse member from input!\n", NULL);
+    container->port = (uint16_t) strtol(token, NULL, 10);
 
-    return result;
+    return 0;
 }
 
 // Print a member to a string (assume buffer is big enough)
@@ -37,15 +64,13 @@ void print_member(member* param, char* buffer) {
 // Reads members from the members file
 member* read_members(char* path) {
 
-    member m;
-    m.next = NULL;
-    member* last = &m;
-
     char buffer[256];
     FILE* file = fopen(path, "r");
     if (file == NULL) return NULL;
 
-    printf("Opening %s\n", path);
+    member m;
+    m.next = NULL;
+    member* last = &m;
 
     while (fgets(buffer, 255, file)) {
 
@@ -53,7 +78,7 @@ member* read_members(char* path) {
 
         char* token = strtok(buffer, " ");
         printf("Token: %s\n", token);
-        next->id = atoi(token);
+        next->id = (uint16_t) strtol(token, NULL, 10);
 
         token = strtok(NULL, " ");
         printf("Token: %s\n", token);
@@ -61,7 +86,7 @@ member* read_members(char* path) {
 
         token = strtok(NULL, " ");
         printf("Token: %s\n", token);
-        next->port = atoi(token);
+        next->port = (uint16_t) strtol(token, NULL, 10);
 
         next->next = NULL;
         last->next = next;

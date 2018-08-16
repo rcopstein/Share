@@ -1,7 +1,3 @@
-//
-// # Entry Module
-//
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -24,21 +20,19 @@ const char METADATA_MEMBERS[] = "metadata/members.txt";
 const char METADATA_HIERARCHY[] = "metadata/logical_hierarchy.txt";
 
 int usage() {
-    // BOLD BLACK = \033[1m\033[30m
-    // RESET = \033[0m
 
     printf("Usage:\n\n");
 
-    printf("\033[1m\033[30m\tshare create <name> [-d <description>] -ip <ip address> [-p <port>] <path>\033[0m\n");
+    printf("\tshare create <name> [-d <description>] -ip <ip address> [-p <port>] <path>\n");
     printf("\tCreates a new network at a given path and listens for connection at a specified port (defaults to 4000)\n\n");
 
-    printf("\033[1m\033[30m\tshare join -ip <ip address> [-p <port>]\033[0m\n");
+    printf("\tshare join -ip <ip address> [-p <port>]\n");
     printf("\tRequests a machine at <ip address> to join a network at a specified port (defaults to 4000)\n\n");
 
-    printf("\033[1m\033[30m\tshare mount <path>\033[0m\n");
+    printf("\tshare mount <path>\n");
     printf("\tMounts the network in a specified <path> using FUSE\n\n");
 
-    printf("\033[1m\033[30m\tshare remove <id>\033[0m\n");
+    printf("\tshare remove <id>\n");
     printf("\tRemove a machine from the network\n");
 
     return 1;
@@ -109,15 +103,8 @@ int create(char* name, char* description, char* ip, uint16_t port) {
     // TO-DO: Allow user to specify owner of the files
 
     char nfs_dir[256];
-    char nfs_exports_entry[256];
-    char nfs_dir_rel[256] = "1/";
-
-    nfs_exports_entry[0] = '\n';
-    nfs_exports_entry[1] = '\0';
+    char nfs_dir_rel[] = "1/";
     realpath(nfs_dir_rel, nfs_dir);
-
-    strncat(nfs_exports_entry, nfs_dir, 255);
-    strncat(nfs_exports_entry, " 127.0.0.1", 255 - strlen(nfs_exports_entry));
 
     // Lower privileges to create files
     setegid(20);
@@ -287,9 +274,11 @@ int proto_join(int sock) {
 
     // Broadcast to every other machine
     char message[256];
+    sprintf(message, "addm");
     member m = build_member(id, ip, port);
     print_member(&m, message + 4);
-    sprintf(message, "addm");
+
+    printf("Sending message %s\n", message);
 
     aux = members;
     while (aux != NULL) {
@@ -310,7 +299,7 @@ int proto_addm(int sock) {
     ip[0] = '\0';
 
     // Receive the data
-    if (recv(sock, &buffer, 21, 0) < 0) {
+    if (recv(sock, &buffer, 21, 0) <= 0) {
         printf("%s\n", buffer);
         return error("Failed to read 'addm' data!\n", NULL);
     }
@@ -515,8 +504,8 @@ int join(char* ip, uint16_t port) {
             return clean_join(client_sock);
         }
 
-        m = parse_member(buffer);
-        metadata_append_member(m);
+        if (parse_member(buffer, &m)) error("Failed to parse '%s' to a member!\n", buffer);
+        else metadata_append_member(m);
     }
 
     // Send acknowledgement
