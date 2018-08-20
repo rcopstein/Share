@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <output.h>
+#include <members.h>
 
 #include "fops.h"
 #include "nfs_ops.h"
@@ -32,31 +33,29 @@ int remove_nfs_dir(char* path) {
 }
 
 // Add NFS recipient
+static char* _ip = NULL;
+static char* _path = NULL;
+static char* _add_nfs_recp(char* line) {
+
+    if (line == NULL) line = _path;
+
+    size_t size = strlen(line);
+    if (line[size-1] == '\n') line[--size] = '\0';
+    size += strlen(_ip) + 2; // Account for additional ' ' char
+
+    char* nline = (char *) malloc(size * sizeof(char));
+    sprintf(nline, "%s %s\n", line, _ip);
+
+    return nline;
+
+}
 int add_nfs_recp(char* path, char* recipient) {
 
-    char buffer[1024];
+    _path = path;
+    _ip = recipient;
 
-    // Get the expected line
-    if (fops_read_line((char *)exportsFile, path, buffer, 1023)) {
-        // Create a new line
-        sprintf(buffer, "%s %s\n", path, recipient);
-    } else {
-        // Remove the \n from the end
-        size_t size = strlen(buffer);
-        if (buffer[size-1] == '\n') buffer[--size] = '\0';
-
-        // Append the recipient
-        if (size + strlen(recipient) + 2 > 1023) return error("Not enough space to append recipient!\n", NULL);
-        sprintf(buffer + size, " %s\n", recipient);
-    }
-
-    // Remove the line
-    if (fops_update_line(exportsFile, path, NULL))
-        return error("Failed to remove the line from exports\n", NULL);
-
-    // Append new line
-    if (fops_append_line(exportsFile, buffer))
-        return error("Failed to append the new line into exports\n", NULL);
+    if (fops_update_line(exportsFile, path, _add_nfs_recp))
+        return error("Failed to update line!\n", NULL);
 
     return 0;
 }
@@ -104,5 +103,18 @@ int remove_nfs_recp(char* path, char* recipient) {
         return error("Failed to append the new line into exports\n", NULL);
 
     return 0;
+
+}
+
+// Mount an NFS view
+int mount_nfs_dir(member* m) {
+
+    char* command;
+    asprintf(&command, "sudo mount -t nfs -o retrycnt=0 %s:%s/%d %d/", m->ip, m->prefix, m->id, m->id);
+    printf("> %s\n", command);
+    int result = system(command);
+    free(command);
+
+    return result;
 
 }

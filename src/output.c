@@ -18,13 +18,13 @@
 int warning(char* comment, void* param) {
     printf(YEL);
     printf(comment, param);
-    printf(NRM "\n");
+    printf(NRM);
     return 0;
 }
 
 int error(char* comment, void* param) {
     printf(RED);
     printf(comment, param);
-    printf(NRM "\n");
+    printf(NRM);
     return 1;
 }

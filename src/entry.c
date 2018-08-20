@@ -7,8 +7,10 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <errno.h>
 
 #include "fops.h"
+#include "nops.h"
 #include "output.h"
 #include "members.h"
 #include "mount.h"
@@ -74,7 +76,7 @@ uint8_t metadata_append_member(member param) {
 
 // Create
 
-int clean_create(uint8_t depth, char* nfs_directory) {
+int clean_create(uint8_t depth, char* pwd, char* nfs_directory) {
     switch (depth) {
         case 6:
             printf("Removing NFS export entry\n");
@@ -94,17 +96,21 @@ int clean_create(uint8_t depth, char* nfs_directory) {
             printf("Removing '.share' folder\n");
             fops_remove_dir(METADATA_DIR);
         default:
-            return 1;
+            break;
     }
+
+    if (nfs_directory != NULL) free(nfs_directory);
+    if (pwd != NULL) free(pwd);
+
+    return 1;
 }
 
 int create(char* name, char* description, char* ip, uint16_t port) {
 
     // TO-DO: Allow user to specify owner of the files
 
-    char nfs_dir[256];
-    char nfs_dir_rel[] = "1/";
-    realpath(nfs_dir_rel, nfs_dir);
+    char nfs[] = "1/";
+    char* pwd = realpath(".", NULL);
 
     // Lower privileges to create files
     setegid(20);
@@ -112,27 +118,30 @@ int create(char* name, char* description, char* ip, uint16_t port) {
 
     // Initialize Metadata
     uint8_t result = metadata_initialize();
-    if (result) return clean_create(result, NULL);
+    if (result) return clean_create(result, pwd, NULL);
 
     // Write first members entry
-    member m = build_member(1, ip, port);
-    if (metadata_append_member(m)) return clean_create(4, NULL);
+    member m = build_member(1, ip, port, pwd);
+    if (metadata_append_member(m)) return clean_create(4, pwd, NULL);
     printf("Added member entry\n");
 
     // Create the NFS directory
-    if (fops_make_dir(nfs_dir)) return clean_create(5, NULL);
+    if (fops_make_dir(nfs)) return clean_create(5, pwd, NULL);
     printf("Created the NFS directory\n");
+
+    char* nfs_path = realpath(nfs, NULL);
 
     // Retake super user privileges
     setegid(0);
     seteuid(0);
 
     // Modify the NFS exports file
-    if (add_nfs_recp(nfs_dir, "127.0.0.1")) return clean_create(5, nfs_dir);
+    printf("> %s\n", nfs_path);
+    if (add_nfs_recp(nfs_path, "127.0.0.1")) return clean_create(5, pwd, nfs_path);
     printf("Updated the exports file\n");
 
     // Restart NFS service
-    if (update_nfs()) return clean_create(6, nfs_dir);
+    if (update_nfs()) return clean_create(6, pwd, nfs_path);
     printf("Updated the NFS service\n");
 
     return 0;
@@ -169,6 +178,7 @@ int parse_create(int argc, char** argv) {
             }
 
             else return error("Unknown flag '%s'\n", argv[i]);
+
         } else {
             if (name[0] == '\0') strncpy(name, argv[i], 50);
             else if (ip[0] == '\0') strncpy(ip, argv[i], 15);
@@ -193,66 +203,45 @@ int parse_create(int argc, char** argv) {
 
 member* members = NULL;
 
-int send_message(char* ip, uint16_t port, void* message, size_t size) {
-
-    int sock;
-    struct sockaddr_in addr;
-
-    sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock < 0) return error("Failed to create socket!\n", NULL);
-
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
-
-    if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)))
-        return error("Failed to connect to socket!\n", NULL);
-
-    if (send(sock, message, size, 0) != size) {
-        error("Failed to send message!", NULL);
-        close(sock);
-        return 1;
-    }
-
-    close(sock);
-    return 0;
-
-}
-
 int proto_join(int sock) {
 
     char ip[16];
+    char pwd[256];
     char buffer[256];
     uint16_t port = 4000;
 
     // Receive IP and PORT
-    if (recv(sock, buffer, 21, 0) != 21)
-        return error("Failed to receive message! Incomplete join protocol!", NULL);
+    if (recv(sock, buffer, 256, 0) < 0)
+        return error("1) Failed to receive message! Incomplete join protocol: '%s'!", buffer);
 
     // Parse received data
-    char* token = strtok(buffer, ":");
+    char* token = strtok(buffer, " ");
     strncpy(ip, token, 15);
 
-    token = strtok(NULL, ":");
+    token = strtok(NULL, " ");
     if (token != NULL) port = (uint16_t) strtol(token, NULL, 10);
 
+    token = strtok(NULL, " ");
+    strncpy(pwd, token, 255);
+
     // Determine an ID
-    uint16_t count = 0;
     uint16_t id = 2;
+    uint16_t count = 0;
     member* aux = members;
     while (aux != NULL) {
         if (aux->id >= id) id = (uint16_t)(aux->id + 1);
         aux = aux->next;
         ++count;
+        printf("Current ID is %d\n", count);
     }
 
     // Send ID
     if (send(sock, &id, 2, 0) != 2)
-        return error("Failed to send id! Incomplete join protocol!", NULL);
+        return error("2) Failed to send id! Incomplete join protocol!\n", NULL);
 
     // Send Members Count
     if (send(sock, &count, 2, 0) != 2)
-        return error("Failed to send count! Incomplete join protocol!", NULL);
+        return error("3) Failed to send count! Incomplete join protocol!\n", NULL);
 
     // Send Members Entries
     aux = members;
@@ -260,29 +249,54 @@ int proto_join(int sock) {
         print_member(aux, buffer);
         printf("%s\n", buffer);
 
-        if (send(sock, &buffer, 21, 0) != 21)
-            return error("Failed to send a member! Incomplete join protocol!", NULL);
+        ssize_t res = send(sock, buffer, 255, 0);
+        if (res < 0)
+            return error("4) Failed to send a member! Incomplete join protocol!\n", NULL);
+        else if (res == 0)
+            return error("Socket has been closed!\n", NULL);
 
+        printf("Sent %zu bytes!\n", res);
         aux = aux->next;
     }
 
     // Receive confirmation
-    if (recv(sock, buffer, 2, 0) != 2)
-        return error("Failed to receive confirmation! Incomplete join protocol!", NULL);
+    ssize_t res = recv(sock, buffer, 2, 0);
+
+    if (res < 0 || strncmp(buffer, "OK", 2) != 0)
+        return error("5) Failed to receive confirmation! Incomplete join protocol!", NULL);
+    else if (res == 0)
+        return error("Socket has been closed!\n", NULL);
 
     printf("Received confirmation!\n");
 
     // Broadcast to every other machine
     char message[256];
     sprintf(message, "addm");
-    member m = build_member(id, ip, port);
+
+    member m = build_member(id, ip, port, pwd);
     print_member(&m, message + 4);
 
     printf("Sending message %s\n", message);
 
+    int other;
     aux = members;
     while (aux != NULL) {
-        send_message(aux->ip, aux->port, message, 21);
+
+        other = nops_open_connection(aux->ip, aux->port);
+
+        if (other < 0) {
+            error("6) Failed to send message to %s\n", aux->ip);
+        } else {
+            res = send(other, message, 255, 0);
+
+            if (res < 0)
+                error("Failed to send message to %s\n", aux->ip);
+            else if (res == 0)
+                error("Socket for %s has been closed!\n", aux->ip);
+
+            nops_close_connection(other);
+        }
+
         aux = aux->next;
     }
 
@@ -291,16 +305,11 @@ int proto_join(int sock) {
 
 int proto_addm(int sock) {
 
-    char ip[16];
     char buffer[256];
 
-    ip[0] = '\0';
-
     // Receive the data
-    if (recv(sock, &buffer, 21, 0) <= 0) {
-        printf("%s\n", buffer);
-        return error("Failed to read 'addm' data!\n", NULL);
-    }
+    if (recv(sock, &buffer, 255, 0) <= 0)
+        return error("Failed to read 'addm' data: '%s'!\n", buffer);
 
     printf("Addm: %s\n", buffer);
 
@@ -309,8 +318,60 @@ int proto_addm(int sock) {
     if (parse_member(buffer, &m))
         return error("Failed to parse member!\n", NULL);
 
+    printf("Member built!\n");
+
     // Add member to metadata
-    return metadata_append_member(m);
+    if (metadata_append_member(m))
+        return error("Failed to append member to metadata!\n", NULL);
+
+    printf("Member added to metadata!\n");
+
+    /*
+    // Add recipient
+    sprintf(buffer, "%s/%d/", m.prefix, m.id);
+    if (add_nfs_recp(buffer, m.ip))
+        return error("Failed to add NFS recipient!\n", NULL);
+
+    // Create mount point
+    char* path;
+    asprintf(&path, "%d/", m.id);
+    printf("Path is %s\n", path);
+
+    if (fops_make_dir(path)) {
+        free(path);
+        return error("Failed to create mount point for member!\n", NULL);
+    }
+    free(path);
+    */
+
+    printf("Created mount point!\n");
+
+    // Mount the NFS view
+    if (mount_nfs_dir(&m)) {
+        error("Failed to mount NFS view!\n", NULL);
+        //return 1;
+    }
+
+    printf("View Mounted!\n");
+
+    // Send confirmation
+    printf("Openning socket at %s:%d\n", m.ip, m.port);
+    fflush(stdout);
+
+    int ssock = nops_open_connection(m.ip, m.port);
+
+    if (send(ssock, members->ip, 15, 0) < 0) {
+        printf("Failed to send confirmation: %d!\n", errno);
+        close(ssock);
+        //free(path);
+        return 1;
+    }
+
+    printf("OK!\n");
+    close(ssock);
+    //free(path);
+    return 0;
+
 }
 
 int proto_remm(int sock) {
@@ -340,54 +401,37 @@ int up(bool foreground) {
     members = read_members((char *) METADATA_MEMBERS);
     if (members == NULL) return error("Failed to read members file!\n", NULL);
 
-    member* aux = members;
-    while (aux != NULL) { printf("%s:%d\n", aux->ip, aux->port); aux = aux->next; }
-
     // Declare variables
-    char buffer[2000];
-    ssize_t read_size;
+    char buffer[4];
+    struct sockaddr_in client;
     int socket_desc, client_sock;
-    struct sockaddr_in server, client;
     socklen_t socket_size = sizeof(struct sockaddr_in);
 
-    // Create Socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) return error("Failed to create socket!\n", NULL);
-
-    // Prepare Server Address
-    server.sin_family = AF_INET;
-    server.sin_port = htons( members->port );
-    server.sin_addr.s_addr = INADDR_ANY;
-
-    // Bind Server Socket
-    if (bind(socket_desc, (const struct sockaddr*)&server, sizeof(server)))
-        return error("Failed to bind socket!\n", NULL);
-
-    // Listen
-    listen(socket_desc, 10);
-    printf("Waiting for incoming connections!\n");
+    // Create socket
+    socket_desc = nops_listen_at(members->port);
+    if (socket_desc < 0) return 1;
 
     // Accept incoming connections
     while (1) {
 
         client_sock = accept(socket_desc, (struct sockaddr*)&client, &socket_size);
-        printf("Client Socket: %d\n", client_sock);
 
         if (client_sock < 0) { error("Failed to accept connection\n", NULL); continue; }
-        else printf("Accepted a connection!\n");
+        else printf("> CONNECTION\n");
 
-        // Read the protocol operation
-        read_size = recv(client_sock, buffer, 4, 0);
-        buffer[4] = '\0';
-        printf("> %s\n", buffer);
+        if (recv(client_sock, buffer, 4, 0) < 0) {
+            error("Failed to receive protocol operation!\n", NULL);
+            continue;
+        }
 
         // Check the protocol
-        if (strcmp(buffer, "join") == 0) proto_join(client_sock);
-        else if (strcmp(buffer, "addm") == 0) proto_addm(client_sock);
-        else if (strcmp(buffer, "remm") == 0) proto_remm(client_sock);
+             if (strncmp(buffer, "join", 4) == 0) proto_join(client_sock);
+        else if (strncmp(buffer, "addm", 4) == 0) proto_addm(client_sock);
+        else if (strncmp(buffer, "remm", 4) == 0) proto_remm(client_sock);
 
         // Close the client socket
         close(client_sock);
+        printf("Closed!\n");
     }
 
     // Close the socket
@@ -414,52 +458,32 @@ int parse_up(int argc, char** argv) {
 
 // Join
 
-int clean_join(int socket) {
+int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client_port) {
 
-    close(socket);
-    return 1;
+    member m;
+    uint16_t aux;
+    char buffer[256];
+    char* pwd = realpath(".", NULL);
 
-}
+    int sock = nops_open_connection(server_ip, server_port);
+    if (sock < 0) return error("Failed to connect to server!\n", NULL);
 
-int join(char* ip, uint16_t port) {
+    char message[256] = "join";
+    sprintf(message + 4, "%s %d %s", client_ip, client_port, pwd);
 
-    // TO-DO Determine NFS directory and update entries
-
-    // Declare variables
-    int client_sock;
-    struct sockaddr_in server_addr;
-
-    // Initialize socket
-    client_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (client_sock < 0) return error("Failed to create socket\n", NULL);
-
-    // Initialize server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = inet_addr(ip);
-
-    // Connect to server
-    int result = connect(client_sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    if (result < 0) {
-        error("Failed to connect to server\n", NULL);
-        return clean_join(client_sock);
-    }
-
-    // Create message
-    char message[] = "join127.0.0.1:5000";
-    size_t size = strlen(message);
-
-    // Send messages
-    if (send(client_sock, message, size, 0) != size) {
-        error("Message was sent with wrong number of bytes!\n", NULL);
-        return clean_join(client_sock);
+    if (send(sock, message, 25, 0) < 0) {
+        error("Failed to send join protocol message!\n", NULL);
+        nops_close_connection(sock);
+        free(pwd);
+        return 1;
     }
 
     // Receive ID
-    uint16_t aux;
-    if (recv(client_sock, &aux, 2, 0) != 2) {
-        error("Failed to receive correctly sized message!\n", NULL);
-        return clean_join(client_sock);
+    if (recv(sock, &aux, 2, 0) < 0) {
+        error("Failed to receive ID!\n", NULL);
+        nops_close_connection(sock);
+        free(pwd);
+        return 1;
     }
 
     printf("Received ID: %d\n", aux);
@@ -467,70 +491,166 @@ int join(char* ip, uint16_t port) {
     // Create metadata
     if (metadata_initialize()) {
         error("Failed to create metadata files!\n", NULL);
-        return clean_join(client_sock);
-    }
-    member m = build_member(aux, "127.0.0.1", 5000);
-    if (metadata_append_member(m)) {
-        error("Failed to append member!\n", NULL);
-        return clean_join(client_sock);
+        nops_close_connection(sock);
+        free(pwd);
+        return 1;
     }
 
+    // Append self as first member
+    m = build_member(aux, client_ip, client_port, pwd);
+    free(pwd);
+
+    if (metadata_append_member(m)) {
+        error("Failed to append member!\n", NULL);
+        nops_close_connection(sock);
+        return 1;
+    }
+
+    // Create the NFS directory
+    sprintf(buffer, "%d/", aux);
+    if (fops_make_dir(buffer)) return error("Failed to create NFS directory!\n", NULL);
+    printf("Created the NFS directory\n");
+
+    // Get full NFS path
+    char* nfs_path = realpath(buffer, NULL);
+
+    printf("The Buffer is: %s\n", buffer);
+    printf("The NFS Path is: %s\n", nfs_path);
+
     // Receive number of members
-    if (recv(client_sock, &aux, 2, 0) != 2) {
+    if (recv(sock, &aux, 2, 0) < 0) {
         error("Failed to receive correctly sized message!\n", NULL);
-        return clean_join(client_sock);
+        nops_close_connection(sock);
+        free(nfs_path);
+        return 1;
     }
     printf("$ of Members: %d\n", aux);
 
     // Read all members
-    char buffer[21];
+
+    int mems = aux;
+    member* list_members = NULL;
 
     while (aux--) {
-        if (recv(client_sock, buffer, 21, 0) != 21) {
-            error("Failed to receive correctly sized message!\n", NULL);
-            return clean_join(client_sock);
+
+        if (recv(sock, buffer, 255, 0) < 0) {
+            error("Failed to receive correctly sized message: '%s'!\n", buffer);
+            nops_close_connection(sock);
+            free(nfs_path);
+            return 1;
         }
 
-        if (parse_member(buffer, &m)) error("Failed to parse '%s' to a member!\n", buffer);
-        else metadata_append_member(m);
+        if (parse_member(buffer, &m)) {
+            error("Failed to parse '%s' to a member!\n", buffer);
+            nops_close_connection(sock);
+            free(nfs_path);
+            return 1;
+        }
+
+        m.next = list_members;
+        list_members = &m;
+
+        sprintf(buffer, "%d", m.id);
+        fops_make_dir(buffer);
+
+        metadata_append_member(m);
+        add_nfs_recp(nfs_path, m.ip);
     }
+
+    if (update_nfs()) {
+        error("Failed to update NFS!\n", NULL);
+        nops_close_connection(sock);
+        free(nfs_path);
+        return 1;
+    }
+
+    // Start to listen
+    struct sockaddr_in host;
+    int ssock = nops_listen_at(client_port);
+    socklen_t size = sizeof(struct sockaddr_in);
+
+    printf("Here!\n");
+
+    if (ssock <= 0)
+        return error("Failed to listen at port!\n", NULL);
 
     // Send acknowledgement
-    if (send(client_sock, "OK", 2, 0) != 2) {
+    if (send(sock, "OK", 2, 0) < 0) {
         error("Failed to send 'OK'!\n", NULL);
-        return clean_join(client_sock);
+        nops_close_connection(sock);
+        free(nfs_path);
+        return 1;
     }
 
-    close(client_sock);
+    // Accept acknowledgement connections
+    int cl_socket;
+    while (mems--) {
+
+        printf(".");
+        fflush(0);
+
+        if ((cl_socket = accept(ssock, (struct sockaddr*)&host, &size)) < 0) {
+            warning("Failed to accept connection!\n", NULL);
+            ++mems;
+            continue;
+        }
+
+        if (recv(cl_socket, buffer, 15, 0) < 0) {
+            printf("Failed to read content. Error: %d!\n", errno);
+            ++mems;
+            continue;
+        }
+
+        member* new_members = list_members;
+        while (new_members != NULL && strcmp(new_members->ip, buffer) != 0) new_members = new_members->next;
+
+        if (new_members == NULL) {
+            error("Couldn't identify acknowledge from '%s'\n", buffer);
+            ++mems;
+            continue;
+        }
+
+        printf("Received confirmation from '%s'\n", buffer);
+
+    }
+
+    nops_close_connection(sock);
+    free(nfs_path);
     return 0;
 }
 
 int parse_join(int argc, char** argv) {
 
     // Declare arguments
-    char ip[16];
-    uint16_t port = 4000;
+    char server[16];
+    char client[16];
+    uint16_t server_port = 4000;
+    uint16_t client_port = 4000;
 
-    // Initialize Arguments
-    ip[0] = '\0';
+    server[0] = '\0';
+    client[0] = '\0';
 
-    // Read arguments
-    printf("Arg: %s\n", argv[0]);
-
+    // Read server address
     char* tok = strtok(argv[0], ":");
-    printf("%s\n", tok);
-    strncpy(ip, tok, 15);
+    strncpy(server, tok, 15);
+    printf("IP: %s\n", tok);
 
     tok = strtok(NULL, ":");
-    if (tok != NULL) port = (uint16_t) (uint16_t) strtol(tok, NULL, 10);
+    if (tok != NULL) server_port = (uint16_t) strtol(tok, NULL, 10);
+
+    // Read client address
+    tok = strtok(argv[1], ":");
+    strncpy(client, tok, 15);
+    printf("IP: %s\n", tok);
+
+    tok = strtok(NULL, ":");
+    if (tok != NULL) client_port = (uint16_t) strtol(tok, NULL, 10);
 
     // Check required arguments
-    if (ip[0] == '\0') return error("Failed to parse ip\n", NULL);
+    if (server[0] == '\0' || client[0] == '\0') return error("Failed to parse ips\n", NULL);
 
-    warning("The ip is %s\n", ip);
-    printf("The port is %d\n", port);
-
-    return join(ip, port);
+    printf("Server: %s:%d\nClient: %s:%d\n", server, server_port, client, client_port);
+    return join(server, server_port, client, client_port);
 }
 
 // Mount
@@ -573,9 +693,17 @@ int delete(uint16_t id) {
     printf("> %s\n", message);
 
     // Send removal to all members
+    int other;
     member* aux = members;
     while (aux != NULL) {
-        send_message(aux->ip, aux->port, message, 25);
+
+        if ((other = nops_open_connection(aux->ip, aux->port))) {
+            error("Failed to send message to %s\n", aux->ip);
+            continue;
+        }
+
+        send(other, message, 7, 0);
+        nops_close_connection(other);
         aux = aux->next;
     }
 

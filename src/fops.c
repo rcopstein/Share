@@ -21,8 +21,9 @@ static bool startsWith(const char *pre, const char *str) {
 int fops_make_dir(const char* dirname) {
 
     struct stat st;
-    if (stat(dirname, &st))
+    if (stat(dirname, &st) && errno != ENOENT) {
         return error("Directory '%s' already exists!\n", (char *) dirname);
+    }
 
     return mkdir(dirname, 0700);
 }
@@ -67,16 +68,19 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
     }
 
     bool flag;
+    char* line;
+    bool found = false;
     size_t size = 1024;
     char* buffer = (char *) malloc(sizeof(char) * size);
 
     while (getline(&buffer, &size, file) > 0) {
 
         flag = false;
-        char* line = buffer;
+        line = buffer;
 
         if (startsWith(prefix, buffer)) {
             line = funct == NULL ? NULL : funct(buffer);
+            found = true;
             flag = true;
         }
 
@@ -86,9 +90,20 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
         }
     }
 
+    if (!found && funct != NULL) {
+        line = funct(NULL);
+
+        if (line != NULL) {
+            fwrite(line, sizeof(char), strlen(line), tempFile);
+            free(line);
+        }
+    }
+
     int result = 0;
-    if (rename(tempPath, filename))
+    if (rename(tempPath, filename)) {
         result = error("Failed to overwrite original file '%s'!\n", (char *) filename);
+        remove(tempPath);
+    }
 
     fclose(tempFile);
     fclose(file);

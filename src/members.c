@@ -6,28 +6,10 @@
 #include "members.h"
 #include "output.h"
 
-// Return the information of the current member
-int current_member(char* path, member* container) {
+// Print a member to a string (assume buffer is big enough)
+void print_member(member* param, char* buffer) {
 
-    // Open the members file
-    FILE* file = fopen(path, "r");
-    if (file == NULL) {
-        error("Failed to open the members file!\n", NULL);
-        return 1;
-    }
-
-    // Get the current line
-    char line[256];
-    if (!fgets((char *)line, 255, file)) {
-        error("Failed to read the members file!\n", NULL);
-        fclose(file);
-        return 1;
-    }
-
-    // Return the parsed member
-    parse_member(line, container);
-
-    return 0;
+    sprintf(buffer, "%d %s %d %s %d %d", param->id, param->ip, param->port, param->prefix, 0, 0);
 
 }
 
@@ -51,14 +33,13 @@ int parse_member(char* input, member* container) {
     if (token == NULL) return error("Failed to parse member from input!\n", NULL);
     container->port = (uint16_t) strtol(token, NULL, 10);
 
+    // Copy Prefix
+    token = strtok(NULL, " ");
+    if (token == NULL) return error("Failed to parse member from input!\n", NULL);
+    container->prefix = (char *) malloc(strlen(token) * sizeof(char) + 1);
+    strcpy(container->prefix, token);
+
     return 0;
-}
-
-// Print a member to a string (assume buffer is big enough)
-void print_member(member* param, char* buffer) {
-
-    sprintf(buffer, "%d %s %d %d %d", param->id, param->ip, param->port, 0, 0);
-
 }
 
 // Reads members from the members file
@@ -73,22 +54,8 @@ member* read_members(char* path) {
     member* last = &m;
 
     while (fgets(buffer, 255, file)) {
-
         member* next = (member*) malloc(sizeof(member));
-
-        char* token = strtok(buffer, " ");
-        printf("Token: %s\n", token);
-        next->id = (uint16_t) strtol(token, NULL, 10);
-
-        token = strtok(NULL, " ");
-        printf("Token: %s\n", token);
-        strncpy(next->ip, token, 15);
-
-        token = strtok(NULL, " ");
-        printf("Token: %s\n", token);
-        next->port = (uint16_t) strtol(token, NULL, 10);
-
-        next->next = NULL;
+        parse_member(buffer, next);
         last->next = next;
         last = next;
     }
@@ -97,7 +64,7 @@ member* read_members(char* path) {
 }
 
 // Build a member struct based on the parameters (Assume ip is decently sized)
-member build_member(uint16_t id, char* ip, uint16_t port) {
+member build_member(uint16_t id, char* ip, uint16_t port, char* prefix) {
 
     member result;
 
@@ -105,6 +72,9 @@ member build_member(uint16_t id, char* ip, uint16_t port) {
     result.port = port;
     result.next = NULL;
     result.id = id;
+
+    result.prefix = (char *) malloc(strlen(prefix) * sizeof(char) + 1);
+    strcpy(result.prefix, prefix);
 
     return result;
 
