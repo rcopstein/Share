@@ -129,12 +129,13 @@ int create(char* name, char* description, char* ip, uint16_t port) {
     if (fops_make_dir(nfs)) return clean_create(5, pwd, NULL);
     printf("Created the NFS directory\n");
 
-    char* nfs_path = realpath(nfs, NULL);
+    //char* nfs_path = realpath(nfs, NULL);
 
     // Retake super user privileges
     setegid(0);
     seteuid(0);
 
+    /*
     // Modify the NFS exports file
     printf("> %s\n", nfs_path);
     if (add_nfs_recp(nfs_path, "127.0.0.1")) return clean_create(5, pwd, nfs_path);
@@ -143,6 +144,7 @@ int create(char* name, char* description, char* ip, uint16_t port) {
     // Restart NFS service
     if (update_nfs()) return clean_create(6, pwd, nfs_path);
     printf("Updated the NFS service\n");
+    */
 
     return 0;
 }
@@ -336,19 +338,16 @@ int proto_addm(int sock) {
         return error("Failed to add NFS recipient!\n", NULL);
 
     // Create mount point
-    char* path;
-    asprintf(&path, "%d/", m.id);
-    printf("Path is %s\n", path);
+    sprintf(buffer, "%d/", m.id);
+    printf("Path is %s\n", buffer);
 
     // Lower privileges to create files
     setegid(20);
     seteuid(501);
 
-    if (fops_make_dir(path)) {
-        free(path);
+    if (fops_make_dir(buffer)) {
         return error("Failed to create mount point for member!\n", NULL);
     }
-    free(path);
 
     printf("Created mount point!\n");
 
