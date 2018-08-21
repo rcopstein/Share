@@ -214,6 +214,8 @@ int proto_join(int sock) {
     if (recv(sock, buffer, 256, 0) < 0)
         return error("1) Failed to receive message! Incomplete join protocol: '%s'!", buffer);
 
+    printf("Received buffer '%s'\n", buffer);
+
     // Parse received data
     char* token = strtok(buffer, " ");
     strncpy(ip, token, 15);
@@ -223,6 +225,8 @@ int proto_join(int sock) {
 
     token = strtok(NULL, " ");
     strncpy(pwd, token, 255);
+
+    printf("Received path '%s'\n", pwd);
 
     // Determine an ID
     uint16_t id = 2;
@@ -326,9 +330,8 @@ int proto_addm(int sock) {
 
     printf("Member added to metadata!\n");
 
-    /*
     // Add recipient
-    sprintf(buffer, "%s/%d/", m.prefix, m.id);
+    sprintf(buffer, "%s/%d", members->prefix, members->id);
     if (add_nfs_recp(buffer, m.ip))
         return error("Failed to add NFS recipient!\n", NULL);
 
@@ -337,20 +340,27 @@ int proto_addm(int sock) {
     asprintf(&path, "%d/", m.id);
     printf("Path is %s\n", path);
 
+    // Lower privileges to create files
+    setegid(20);
+    seteuid(501);
+
     if (fops_make_dir(path)) {
         free(path);
         return error("Failed to create mount point for member!\n", NULL);
     }
     free(path);
-    */
 
     printf("Created mount point!\n");
 
     // Mount the NFS view
     if (mount_nfs_dir(&m)) {
         error("Failed to mount NFS view!\n", NULL);
-        //return 1;
+        return 1;
     }
+
+    // Recover privileges
+    setegid(0);
+    seteuid(0);
 
     printf("View Mounted!\n");
 
@@ -359,17 +369,16 @@ int proto_addm(int sock) {
     fflush(stdout);
 
     int ssock = nops_open_connection(m.ip, m.port);
+    print_member(members, buffer);
 
-    if (send(ssock, members->ip, 15, 0) < 0) {
+    if (send(ssock, buffer, 255, 0) < 0) {
         printf("Failed to send confirmation: %d!\n", errno);
         close(ssock);
-        //free(path);
         return 1;
     }
 
     printf("OK!\n");
     close(ssock);
-    //free(path);
     return 0;
 
 }
@@ -471,7 +480,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     char message[256] = "join";
     sprintf(message + 4, "%s %d %s", client_ip, client_port, pwd);
 
-    if (send(sock, message, 25, 0) < 0) {
+    if (send(sock, message, 255, 0) < 0) {
         error("Failed to send join protocol message!\n", NULL);
         nops_close_connection(sock);
         free(pwd);
@@ -487,6 +496,10 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     }
 
     printf("Received ID: %d\n", aux);
+
+    // Lower privileges to create files
+    setegid(20);
+    seteuid(501);
 
     // Create metadata
     if (metadata_initialize()) {
@@ -510,6 +523,10 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     sprintf(buffer, "%d/", aux);
     if (fops_make_dir(buffer)) return error("Failed to create NFS directory!\n", NULL);
     printf("Created the NFS directory\n");
+
+    // Recover privileges
+    setegid(0);
+    seteuid(0);
 
     // Get full NFS path
     char* nfs_path = realpath(buffer, NULL);
@@ -549,9 +566,6 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
 
         m.next = list_members;
         list_members = &m;
-
-        sprintf(buffer, "%d", m.id);
-        fops_make_dir(buffer);
 
         metadata_append_member(m);
         add_nfs_recp(nfs_path, m.ip);
@@ -595,22 +609,42 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
             continue;
         }
 
-        if (recv(cl_socket, buffer, 15, 0) < 0) {
+        if (recv(cl_socket, buffer, 255, 0) < 0) {
             printf("Failed to read content. Error: %d!\n", errno);
             ++mems;
             continue;
         }
 
-        member* new_members = list_members;
-        while (new_members != NULL && strcmp(new_members->ip, buffer) != 0) new_members = new_members->next;
-
-        if (new_members == NULL) {
-            error("Couldn't identify acknowledge from '%s'\n", buffer);
+        if (parse_member(buffer, &m)) {
+            error("Couldn't parse member from message: '%s'!\n", NULL);
             ++mems;
             continue;
         }
 
-        printf("Received confirmation from '%s'\n", buffer);
+        printf("Received confirmation from '%s:%d'\n", m.ip, m.port);
+        sprintf(buffer, "%d/", m.id);
+
+        printf("Trying to create folder for ID %d\n", m.id);
+
+        // Lower privileges to create files
+        setegid(20);
+        seteuid(501);
+
+        if (fops_make_dir(buffer)) {
+            printf("Failed to create mount point for member, error: %d!", errno);
+            ++mems;
+            continue;
+        }
+
+        if (mount_nfs_dir(&m)) {
+            error("Failed to mount NFS dir for member", NULL);
+            ++mems;
+            continue;
+        }
+
+        // Recover privileges
+        setegid(0);
+        seteuid(0);
 
     }
 
