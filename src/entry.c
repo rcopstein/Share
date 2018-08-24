@@ -16,6 +16,7 @@
 #include "mount.h"
 #include "hierarchy.h"
 #include "nfs_ops.h"
+#include "server.h"
 
 const char METADATA_DIR[] = "metadata/";
 const char METADATA_MEMBERS[] = "metadata/members.txt";
@@ -202,8 +203,6 @@ int parse_create(int argc, char** argv) {
 }
 
 // Up
-
-member* members = NULL;
 
 int proto_join(int sock) {
 
@@ -752,7 +751,7 @@ int parse_delete(int argc, char** argv) {
 
 // Main
 
-int main(int argc, char** argv) {
+int _main(int argc, char** argv) {
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();

@@ -10,9 +10,50 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <stdint.h>
 
 #include "output.h"
 #include "nops.h"
+
+int nops_read_message(int conn, void** buffer, uint16_t* size) {
+
+    uint16_t msg_size;
+    ssize_t result = recv(conn, &msg_size, sizeof(uint16_t), 0);
+
+    if (result == 0) return NOPS_DISCONNECTED;
+    else if (result < 0) return NOPS_FAILURE;
+
+    if (*buffer == NULL || *size < msg_size) {
+        *buffer = realloc(*buffer, msg_size);
+        *size = msg_size;
+    }
+
+    if (*buffer == NULL) return NOPS_FAILURE;
+
+    result = recv(conn, *buffer, msg_size, 0);
+
+    if (result == 0) return NOPS_DISCONNECTED;
+    else if (result < 0) return NOPS_FAILURE;
+
+    return NOPS_SUCCESS;
+}
+
+int nops_send_message(int conn, void* content, uint16_t size) {
+
+    void* message = malloc(size + sizeof(uint16_t));
+    uint16_t* message_content = (uint16_t *)message + 1;
+
+    memcpy(message, &size, sizeof(uint16_t));
+    memcpy(message_content, content, size);
+
+    size_t message_size = size + sizeof(uint16_t);
+    ssize_t result = send(conn, message, message_size, 0);
+
+    free(message);
+
+    if (result > 0) return NOPS_SUCCESS;
+    return result == 0 ? NOPS_DISCONNECTED : NOPS_FAILURE;
+}
 
 int nops_open_connection(char* ip, uint16_t port) {
 

@@ -15,6 +15,6 @@ find_package(FUSE REQUIRED)
 include_directories("${CMAKE_SOURCE_DIR}/include")
 file(GLOB SOURCES "src/*.c")
 
-add_executable(share ${SOURCES})
+add_executable(share src/server.c src/protocols.c src/protocol_join.c src/members.c src/output.c src/nops.c src/fops.c src/nfs_ops_darwin.c)
 include_directories(${FUSE_INCLUDE_DIR})
 target_link_libraries(share ${FUSE_LIBRARIES})

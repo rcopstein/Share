@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <output.h>
-#include <members.h>
 
 #include "fops.h"
+#include "output.h"
 #include "nfs_ops.h"
+#include "members.h"
 
 const char exportsFile[] = "/etc/exports";
 
@@ -110,7 +110,7 @@ int remove_nfs_recp(char* path, char* recipient) {
 int mount_nfs_dir(member* m) {
 
     char* command;
-    asprintf(&command, "sudo mount -t nfs -o retrycnt=0 %s:%s/%d %d/", m->ip, m->prefix, m->id, m->id);
+    asprintf(&command, "sudo mount -t nfs -o retrycnt=0 %s:%s/%s %s/", m->ip, m->prefix, m->id, m->id);
     printf("> %s\n", command);
     int result = system(command);
     free(command);

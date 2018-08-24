@@ -38,13 +38,13 @@ static treenode* create_treenode(char* path) {
 }
 
 // Print the path tree
-static void print_treenode(treenode* node, uint8_t lvl) {
+/*static void print_treenode(treenode* node, uint8_t lvl) {
     if (node == NULL) return;
     for (uint8_t i = 0; i < lvl; ++i) printf("\t");
     printf("%s\n", node->segment);
     print_treenode(node->child, (uint8_t)(lvl + 1));
     print_treenode(node->next, lvl);
-}
+}*/
 
 // Loads the path tree from a file
 uint8_t hierarchy_load(const char *source_file) {
