@@ -16,9 +16,11 @@ typedef struct _member {
 
 } member;
 
-// Define parsing methods
+// Define methods
 char* generate_member_id();
+size_t size_of_member(member* m);
 
+void free_member(member* m);
 int member_load_from_file();
 
 member* get_current_member();
@@ -29,7 +31,7 @@ void add_member(member* member);
 
 void members_for_each(void (*funct)(member*));
 
-int serialize_member(member *param, char **buffer);
+size_t serialize_member(member *param, char **buffer);
 int deserialize_member(char *input, member *container);
 
 member* build_member(char* id, char* ip, uint16_t port, char* prefix);

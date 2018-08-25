@@ -17,19 +17,8 @@ int update_nfs() {
 
 // Remove a NFS directory
 int remove_nfs_dir(char* path) {
-
-    size_t size = strlen(path);
-    size = (size_t) fmin(size, 254);
-
-    char buffer[256];
-    strncpy(buffer, path, 254);
-    buffer[size] = ' ';
-    buffer[size+1] = '\0';
-
-    fops_update_line(exportsFile, buffer, NULL);
-
+    fops_update_line(exportsFile, path, NULL);
     return 0;
-
 }
 
 // Add NFS recipient
@@ -61,49 +50,44 @@ int add_nfs_recp(char* path, char* recipient) {
 }
 
 // Remove NFS recipient
-int remove_nfs_recp(char* path, char* recipient) {
+static char* _recp = NULL;
+static char* _remove_nfs_recp(char* line) {
 
-    char buffer[1024];
+    if (line == NULL) return NULL;
+    if (_recp == NULL) return line;
 
-    // Get expected line
-    if (fops_read_line((char*)exportsFile, path, buffer, 1023))
-        return error("Failed to get the line from '%s'\n", (char *) exportsFile);
+    size_t size = strlen(line) + 1;
+    char *nline = (char *) malloc(size * sizeof(char));
 
-    // Remove the \n from the end
-    size_t size = strlen(buffer);
-    if (buffer[size-1] == '\n') buffer[--size] = '\0';
-
-    // Copy tokens into a new buffer
-    char line[1024];
-    uint16_t aux = 0;
-    char* token = strtok(buffer, " ");
+    char* aux = nline;
+    uint16_t count = 0;
+    char* token = strtok(line, " \n");
 
     while (token != NULL) {
-
-        printf("Token: %s\n", token);
-
-        if (strcmp(token, recipient) != 0) {
-            if (aux != 0) line[aux++] = ' ';
-            strcpy(line + aux, token);
-            aux += strlen(token);
+        if (strcmp(token, _recp) != 0) {
+            sprintf(aux, "%s ", token);
+            aux += strlen(token) + 1;
+            ++count;
         }
-
-        token = strtok(NULL, " ");
-
+        token = strtok(NULL, " \n");
     }
 
-    line[aux] = '\0';
+    if (count <= 1) {
+        free(nline);
+        return NULL;
+    }
 
-    // Remove the line
-    if (fops_update_line(exportsFile, path, NULL))
-        return error("Failed to remove the line from exports\n", NULL);
+    *(aux - 1) = '\n';
+    return nline;
+}
+int remove_nfs_recp(char* path, char* recipient) {
 
-    // Append new line
-    if (fops_append_line(exportsFile, line))
-        return error("Failed to append the new line into exports\n", NULL);
+    _recp = recipient;
+
+    if (fops_update_line(exportsFile, path, _remove_nfs_recp))
+        return error("Failed to update line!\n", NULL);
 
     return 0;
-
 }
 
 // Mount an NFS view

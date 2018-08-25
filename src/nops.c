@@ -15,7 +15,7 @@
 #include "output.h"
 #include "nops.h"
 
-int nops_read_message(int conn, void** buffer, uint16_t* size) {
+int nops_read_message(int conn, void** buffer, size_t * size) {
 
     uint16_t msg_size;
     ssize_t result = recv(conn, &msg_size, sizeof(uint16_t), 0);
@@ -38,7 +38,7 @@ int nops_read_message(int conn, void** buffer, uint16_t* size) {
     return NOPS_SUCCESS;
 }
 
-int nops_send_message(int conn, void* content, uint16_t size) {
+int nops_send_message(int conn, void* content, size_t size) {
 
     void* message = malloc(size + sizeof(uint16_t));
     uint16_t* message_content = (uint16_t *)message + 1;

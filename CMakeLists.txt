@@ -11,10 +11,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(CMAKE_C_STANDARD 99)
 
 find_package(FUSE REQUIRED)
+find_package(Threads REQUIRED)
 
 include_directories("${CMAKE_SOURCE_DIR}/include")
 file(GLOB SOURCES "src/*.c")
 
-add_executable(share src/server.c src/protocols.c src/protocol_join.c src/members.c src/output.c src/nops.c src/fops.c src/nfs_ops_darwin.c)
 include_directories(${FUSE_INCLUDE_DIR})
+add_executable(share src/server.c src/protocols.c src/protocol_join.c src/members.c src/output.c src/nops.c src/fops.c src/nfs_ops_darwin.c)
+
+if(THREADS_HAVE_PTHREAD_ARG)
+    target_compile_options(my_app PUBLIC "-pthread")
+endif()
+if(CMAKE_THREAD_LIBS_INIT)
+    target_link_libraries(my_app "${CMAKE_THREAD_LIBS_INIT}")
+endif()
+
 target_link_libraries(share ${FUSE_LIBRARIES})

@@ -2,4 +2,4 @@
 
 #include <stdint.h>
 
-void protocol_handle(char* content, uint16_t size);
+void protocol_handle(char* content, size_t size);

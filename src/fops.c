@@ -11,9 +11,18 @@
 
 // Support functions
 
-static bool startsWith(const char *pre, const char *str) {
-    size_t lenpre = strlen(pre), lenstr = strlen(str);
-    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
+static bool matches(const char *pre, const char *str) {
+
+    size_t lenpre = strlen(pre);
+    size_t lenstr = strlen(str);
+
+    if (lenstr < lenpre || strncmp(pre, str, lenpre) != 0) return false;
+
+    if (str[lenpre] == ' '  ||
+        str[lenpre] == '\n' ||
+        str[lenpre] == '\0') return true;
+
+    return false;
 }
 
 // New
@@ -48,7 +57,7 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
     if (file == NULL) return error("Failed to open file '%s'!\n", (char *) filename);
 
     while (getline(&buffer, &size, file))
-        if (startsWith(prefix, buffer))
+        if (matches(prefix, buffer))
             return 0;
 
     return 1;
@@ -78,7 +87,7 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
         flag = false;
         line = buffer;
 
-        if (startsWith(prefix, buffer)) {
+        if (matches(prefix, buffer)) {
             line = funct == NULL ? NULL : funct(buffer);
             found = true;
             flag = true;

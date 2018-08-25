@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include "members.h"
 #include "output.h"
@@ -9,13 +10,7 @@
 // Member struct
 typedef struct __member {
 
-    char* id;
-    char ip[16];
-    char* prefix;
-    uint16_t port;
-    uint16_t id_size;
-    uint16_t prefix_size;
-
+    member *content;
     struct __member *next;
 
 } _member;
@@ -26,44 +21,25 @@ static const char filepath[] = "metadata/members.txt";
 static _member* members = NULL;
 static uint16_t child_count = 0;
 
-// Generate a new unique ID following the pattern
-char* generate_member_id() {
+// Return the size of the contents of a member (without string terminators)
+size_t size_of_member(member* m) {
 
-    ++child_count;
-    // TO-DO Serialize in the members file
-
-    char* id = malloc(sizeof(char) * (strlen(members->id) + 6));
-    sprintf(id, "%s-%d", members->id, child_count);
-
-    return id;
+    return 3 * sizeof(uint16_t) + 15 + m->prefix_size + m->id_size;
 
 }
 
-// Remove a member from the members list
-void remove_member(char* id) {
+// Frees a member from memory
+void free_member(member *m) {
 
-    _member** aux = &members;
-
-    while (*aux != NULL) {
-        if (strcmp((*aux)->id, id) == 0) {
-            _member* m = *aux;
-            *aux = (*aux)->next;
-            free(m);
-            return;
-        }
-        *aux = (*aux)->next;
-    }
+    free(m->prefix);
+    free(m->id);
+    free(m);
 
 }
+static void _free_member(_member *m) {
 
-// Add a member to the members list
-void add_member(member* member) {
-
-    _member* m = (_member *) malloc(sizeof(_member));
-    memcpy(m, member, sizeof(member));
-
-    m->next = members->next;
-    members->next = m;
+    free_member(m->content);
+    free(m);
 
 }
 
@@ -77,20 +53,75 @@ int member_load_from_file() {
     _member** head = &members;
 
     while (fgets(buffer, 255, file)) {
+
+        member* m = (member*) malloc(sizeof(member));
+        deserialize_member(buffer, m);
+
         _member* next = (_member*) malloc(sizeof(_member));
-        deserialize_member(buffer, next);
+        next->content = m;
+        next->next = NULL;
 
         *head = next;
         *head = next->next;
     }
 
+    if (*head) (*head)->next = NULL;
     return 0;
+}
+
+// Generate a new unique ID following the pattern
+char* generate_member_id() {
+
+    ++child_count;
+    // TO-DO Serialize in the members file
+
+    member *current = get_current_member();
+    char* id = malloc(sizeof(char) * (current->id_size + 6));
+    sprintf(id, "%s-%d", current->id, child_count);
+
+    return id;
+
+}
+
+// Remove a member from the members list
+void remove_member(char* id) {
+
+    _member** aux = &members;
+
+    while (*aux != NULL) {
+        if (strcmp((*aux)->content->id, id) == 0) {
+            _member* m = *aux;
+            *aux = (*aux)->next;
+            _free_member(m);
+            return;
+        }
+        *aux = (*aux)->next;
+    }
+
+}
+
+// Add a member to the members list
+void add_member(member* memb) {
+
+    _member* m = (_member *) malloc(sizeof(_member));
+    member* n = (member *) malloc(sizeof(member));
+
+    memcpy(n, memb, sizeof(member));
+    m->content = n;
+
+    if (members != NULL) {
+        m->next = members->next;
+        members->next = m;
+    } else {
+        members = m;
+    }
+
 }
 
 // Return the current member
 member* get_current_member() {
 
-    return (member*) members;
+    return members->content;
 
 }
 
@@ -100,7 +131,7 @@ member* get_certain_member(char* id) {
     _member* aux = members;
 
     while (aux != NULL) {
-        if (strcmp(aux->id, id) == 0) return (member *) aux;
+        if (strcmp(aux->content->id, id) == 0) return aux->content;
         aux = aux->next;
     }
 
@@ -113,19 +144,27 @@ void members_for_each(void (*funct)(member*)) {
     _member* aux = members;
 
     while (aux != NULL) {
-        funct((member *) aux);
+        funct(aux->content);
         aux = aux->next;
     }
 
 }
 
 // Print a member to a string (assume buffer is big enough)
-int serialize_member(member *param, char **buffer) {
+size_t serialize_member(member *param, char **buffer) {
+
+    printf("SERIALIZE\n");
+    printf("ID: %s\n", param->id);
+    printf("ID Size: %d\n", param->id_size);
+    printf("IP: %s\n", param->ip);
+    printf("Port: %d\n", param->port);
+    printf("Prefix Size: %d\n", param->prefix_size);
+    printf("Prefix: %s\n", param->prefix);
+    printf("\n");
 
     // Calculate the size of the output
-    uint32_t size = sizeof(member); // 2 string terminators
-    size += param->prefix_size;
-    size += param->id_size;
+    size_t size = size_of_member(param);
+    printf("Size is: %zu\n", size);
 
     // Allocate the buffer, if necessary
     if (*buffer == NULL) *buffer = (char *) malloc(size);
@@ -151,6 +190,13 @@ int serialize_member(member *param, char **buffer) {
     memcpy(aux, param->prefix, param->prefix_size); // Copy the prefix
     //aux += param->prefix_size;
 
+    aux = *buffer;
+    for (int i = 0; i < size; ++i) {
+        if (isprint(aux[i])) printf("%c", aux[i]);
+        else printf("'%u'", aux[i]);
+    }
+    printf("\n");
+
     return size;
 
 }
@@ -165,11 +211,13 @@ int deserialize_member(char *input, member *container) {
     container->id_size = size;
     aux += sizeof(uint16_t);
 
-    container->id = (char *) malloc(size); // Read the ID
+    container->id = (char *) malloc(size + 1); // Read the ID
     strncpy(container->id, aux, size);
+    container->id[size] = '\0';
     aux += size;
 
     strncpy(container->ip, aux, 15); // Read the IP
+    container->ip[15] = '\0';
     aux += 15;
 
     memcpy(&(container->port), aux, sizeof(uint16_t)); // Read the port
@@ -179,9 +227,19 @@ int deserialize_member(char *input, member *container) {
     container->prefix_size = size;
     aux += sizeof(uint16_t);
 
-    container->prefix = (char *) malloc(size); // Read the prefix
+    container->prefix = (char *) malloc(size + 1); // Read the prefix
     strncpy(container->prefix, aux, size);
+    container->prefix[size] = '\0';
     // aux += size;
+
+    printf("DESERIALIZE\n");
+    printf("ID: %s\n", container->id);
+    printf("ID Size: %d\n", container->id_size);
+    printf("IP: %s\n", container->ip);
+    printf("Port: %d\n", container->port);
+    printf("Prefix Size: %d\n", container->prefix_size);
+    printf("Prefix: %s\n", container->prefix);
+    printf("\n");
 
     return 0;
 }

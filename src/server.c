@@ -1,8 +1,10 @@
 #include <stdint.h>
-#include <sys/socket.h>
+#include <pthread.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/socket.h>
+#include <ctype.h>
 
 #include "protocols.h"
 #include "output.h"
@@ -10,26 +12,44 @@
 
 #include "members.h"
 
-int server_start(uint16_t port) {
+// Variables
+static int stop = 0;
+static int server_socket;
+static pthread_t server_thread;
 
-    int sock;
-    int client_sock;
+// Server Cleanup
+void server_cleanup(int signal) {
+    stop = 1;
+    nops_close_connection(server_socket);
+}
+
+// Starts Server at Port
+void* server_start(void* vport) {
+
+    int client_socket;
     struct sockaddr_in client;
     socklen_t socket_size = sizeof(struct sockaddr_in);
 
-    if ((sock = nops_listen_at(port)) < 0)
-        return error("Failed to listen at port!", NULL);
+    uint16_t port = *((uint16_t*)vport);
 
-    while (1) {
+    if ((server_socket = nops_listen_at(port)) < 0) {
+        error("Failed to listen at port!", NULL);
+        return NULL;
+    }
 
-        client_sock = accept(sock, (struct sockaddr*)&client, &socket_size);
+    signal(SIGINT, &server_cleanup);
 
-        if (client_sock < 0) { error("Failed to accept connection\n", NULL); continue; }
+    for (;;) {
+
+        client_socket = accept(server_socket, (struct sockaddr*)&client, &socket_size);
+        if (stop) break;
+
+        if (client_socket < 0) { error("Failed to accept connection\n", NULL); continue; }
         else printf("> CONNECTION\n");
 
-        uint16_t size = 0;
+        size_t size = 0;
         char* buffer = NULL;
-        int result = nops_read_message(client_sock, (void**)&buffer, &size);
+        int result = nops_read_message(client_socket, (void**)&buffer, &size);
 
         if (result == NOPS_DISCONNECTED) {
             warning("Socket disconnected!\n", NULL);
@@ -40,20 +60,25 @@ int server_start(uint16_t port) {
         }
 
         printf("Received message: '%s'\n", buffer);
-        printf("Size is: '%d'\n\n", size);
+        printf("Size is: '%zu'\n\n", size);
 
-        // TO-DO Do this in separate thread
+        for (int i = 0; i < size; ++i) {
+            if (isprint(buffer[i])) printf("%c", buffer[i]);
+            else printf("'%u'", buffer[i]);
+        }
+        printf("\n");
+
         protocol_handle(buffer, size);
         free(buffer);
 
+        nops_close_connection(client_socket);
+        printf("> CLOSED\n");
     }
 
-    nops_close_connection(sock);
-    return 0;
-
+    return NULL;
 }
 
-int server_send(char* ip, uint16_t port, void* message, uint16_t size) {
+int server_send(char* ip, uint16_t port, void* message, size_t size) {
 
     // Open the connection socket
     int sock = nops_open_connection(ip, port);
@@ -73,15 +98,25 @@ int server_send(char* ip, uint16_t port, void* message, uint16_t size) {
 
 int main(int argc, char** argv) {
 
-    // Temporary
-    members = build_member("AA", "127.000.000.111", 4000, "/Users/rcopstein/Desktop");
+    if (argc < 2) return 1;
 
-    char sample[256] = "jreq";
-    char *aux = (char *)(&sample) + 4;
-    serialize_member(members, &aux);
+    uint16_t port = (uint16_t) strtol(argv[1], NULL, 10);
+    member* m = build_member("AA", "127.0.0.1", port, "/Users/rcopstein/Desktop");
+    add_member(m);
 
-    //server_start(4000);
-    protocol_handle(sample, 40);
+    printf("My port is %d\n", port);
+    pthread_create(&server_thread, NULL, server_start, &port);
+
+    if (port == 5000) {
+        char sample[256] = "jreq";
+        char *aux = (char *) (&sample) + 4;
+        size_t size = serialize_member(m, &aux);
+
+        server_send("127.0.0.1", 4000, sample, (uint16_t)(size + 4));
+    }
+
+    pthread_join(server_thread, NULL);
+    printf("\nClosing gracefully!\n");
     return 0;
 
 }
