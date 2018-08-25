@@ -153,15 +153,6 @@ void members_for_each(void (*funct)(member*)) {
 // Print a member to a string (assume buffer is big enough)
 size_t serialize_member(member *param, char **buffer) {
 
-    printf("SERIALIZE\n");
-    printf("ID: %s\n", param->id);
-    printf("ID Size: %d\n", param->id_size);
-    printf("IP: %s\n", param->ip);
-    printf("Port: %d\n", param->port);
-    printf("Prefix Size: %d\n", param->prefix_size);
-    printf("Prefix: %s\n", param->prefix);
-    printf("\n");
-
     // Calculate the size of the output
     size_t size = size_of_member(param);
     printf("Size is: %zu\n", size);
@@ -189,13 +180,6 @@ size_t serialize_member(member *param, char **buffer) {
 
     memcpy(aux, param->prefix, param->prefix_size); // Copy the prefix
     //aux += param->prefix_size;
-
-    aux = *buffer;
-    for (int i = 0; i < size; ++i) {
-        if (isprint(aux[i])) printf("%c", aux[i]);
-        else printf("'%u'", aux[i]);
-    }
-    printf("\n");
 
     return size;
 
@@ -231,15 +215,6 @@ int deserialize_member(char *input, member *container) {
     strncpy(container->prefix, aux, size);
     container->prefix[size] = '\0';
     // aux += size;
-
-    printf("DESERIALIZE\n");
-    printf("ID: %s\n", container->id);
-    printf("ID Size: %d\n", container->id_size);
-    printf("IP: %s\n", container->ip);
-    printf("Port: %d\n", container->port);
-    printf("Prefix Size: %d\n", container->prefix_size);
-    printf("Prefix: %s\n", container->prefix);
-    printf("\n");
 
     return 0;
 }

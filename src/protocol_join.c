@@ -8,12 +8,15 @@
 #include "members.h"
 #include "output.h"
 #include "server.h"
+#include "fops.h"
 
 // Handle Join Request
 static void clean_protocol_join_req(int depth, char* path, char* ip, char* id) {
     switch (depth) {
+        case 2:
+            if (fops_remove_dir(id)) error("Failed to remove directory for member '%s'\n", id);
         case 1:
-            if (remove_nfs_recp(path, ip) || update_nfs()) error("Failed to clean up NFS exports!\n", NULL);
+            if (remove_nfs_recp(path, ip)) error("Failed to clean up NFS exports!\n", NULL);
             remove_member(id);
         default:
             break;
@@ -31,7 +34,7 @@ void protocol_join_req(char *message) {
 
     // Add it to NFS permissions
     member* current = get_current_member();
-    if (add_nfs_recp(current->prefix, m.ip) || update_nfs()) {
+    if (add_nfs_recp(current, m.ip)) {
         error("Failed to add ip as NFS recipient!\n", NULL);
         clean_protocol_join_req(0, NULL, NULL, NULL);
         return;
@@ -46,6 +49,13 @@ void protocol_join_req(char *message) {
     m.id_size = (uint16_t) id_size;
     add_member(&m);
 
+    // Create folder for it
+    if (fops_make_dir(m.id)) {
+        error("Failed to create folder for member '%s'\n", m.id);
+        clean_protocol_join_req(1, current->prefix, m.ip, m.id);
+        return;
+    }
+
     // Create message with data
     size_t size = size_of_member(current);
     size += id_size + sizeof(uint16_t) + 4 * sizeof(char);
@@ -58,30 +68,28 @@ void protocol_join_req(char *message) {
     char* aux = reply + 4 + id_size + sizeof(uint16_t);
     serialize_member(current, &aux);
 
-    for (int i = 0; i < size; ++i) {
-        if (isprint(reply[i])) printf("%c", reply[i]);
-        else printf("'%u'", reply[i]);
-    }
-    printf("\n");
-
     // Reply the join
     if (server_send(m.ip, m.port, reply, size)) {
         error("Failed to reply to message!\n", NULL);
-        clean_protocol_join_req(1, current->prefix, m.ip, m.id);
+        clean_protocol_join_req(2, current->prefix, m.ip, m.id);
         return;
     }
 
 }
 
 // Handle Join Reply
-static void clean_protocol_join_rep(int depth, char* path, char* recp, char* id) {
+static void clean_protocol_join_rep(int depth, char* path, char* recp, char* id, char* id2) {
     switch (depth) {
-        case 3:
+        case 5:
             if (remove_nfs_recp(path, recp)) error("Failed to remove recipient!\n", NULL);
-        case 2:
+        case 4:
             // Unmount NFS dir
+        case 3:
+            fops_remove_dir(id2);
+        case 2:
+            remove_member(id2);
         case 1:
-            remove_member(id);
+            fops_remove_dir(id);
         default:
             break;
     }
@@ -96,7 +104,7 @@ void protocol_join_rep(char *message) {
     // Read the ID
     char *id = (char *) malloc(size + 1);
     memcpy(id, message, size);
-    id[size + 1] = '\0';
+    id[size] = '\0';
     message += size;
 
     // Assign ID to self
@@ -104,39 +112,54 @@ void protocol_join_rep(char *message) {
     current->id_size = size;
     current->id = id;
 
+    // Create folder for itself
+    if (fops_make_dir(id)) {
+        error("Failed to create folder to self!\n", NULL);
+        return;
+    }
+    printf("Created folder '%s'\n", id);
+
     // Read the member replied
     member m;
     if (deserialize_member(message, &m)) {
         error("Failed to parse member from input!\n", NULL);
+        clean_protocol_join_rep(1, NULL, NULL, id, m.id);
         return;
     }
     add_member(&m);
 
     printf("%s %s %d %s\n", m.id, m.ip, m.port, m.prefix);
 
+    // Create folder for other member
+    if (fops_make_dir(m.id)) {
+        error("Failed to create folder for '%s'\n", m.id);
+        clean_protocol_join_rep(2, NULL, NULL, id, m.id);
+        return;
+    }
+
     // Mount NFS
-    /*if (mount_nfs_dir(&m)) {
+    if (mount_nfs_dir(&m)) {
         error("Failed to mount NFS folder!\n", NULL);
-        clean_protocol_join_rep(1, NULL, NULL, id);
+        clean_protocol_join_rep(3, NULL, NULL, id, m.id);
         return;
     }
 
     // Add NFS recipient
-    if (add_nfs_recp(current->prefix, m.ip)) {
+    if (add_nfs_recp(current, m.ip)) {
         error("Failed to add NFS recipient!\n", NULL);
-        clean_protocol_join_rep(2, current->prefix, m.ip, id);
+        clean_protocol_join_rep(4, current->prefix, m.ip, id, m.id);
         return;
-    }*/
+    }
 
     // Send acknowledgement
-    char ack[19 + sizeof(uint16_t)];
+    char ack[size + 4 + sizeof(uint16_t)];
     memcpy(ack, "jack", 4);
-    memcpy(ack + 4, &(m.id_size), sizeof(uint16_t));
-    memcpy(ack + 4 + sizeof(uint16_t), m.id, 15);
+    memcpy(ack + 4, &size, sizeof(uint16_t));
+    memcpy(ack + 4 + sizeof(uint16_t), id, size);
 
-    if (server_send(m.ip, m.port, ack, 19)) {
+    if (server_send(m.ip, m.port, ack, size + 4 + sizeof(uint16_t))) {
         error("Failed to send acknowledge!\n", NULL);
-        clean_protocol_join_rep(3, current->prefix, m.ip, id);
+        clean_protocol_join_rep(5, current->prefix, m.ip, id, m.id);
         return;
     }
 }
@@ -167,5 +190,4 @@ void protocol_join_ack(char *message) {
         free(id);
         return;
     }
-
 }

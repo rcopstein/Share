@@ -2,6 +2,6 @@
 
 #include <stdint.h>
 
-int server_start(uint16_t port);
+void* server_start(void* vport);
 
-int server_send(char* ip, uint16_t port, void* message, uint16_t size);
+int server_send(char* ip, uint16_t port, void* message, size_t size);

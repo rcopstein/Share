@@ -99,20 +99,27 @@ int server_send(char* ip, uint16_t port, void* message, size_t size) {
 int main(int argc, char** argv) {
 
     if (argc < 2) return 1;
-
     uint16_t port = (uint16_t) strtol(argv[1], NULL, 10);
-    member* m = build_member("AA", "127.0.0.1", port, "/Users/rcopstein/Desktop");
-    add_member(m);
 
     printf("My port is %d\n", port);
     pthread_create(&server_thread, NULL, server_start, &port);
 
     if (port == 5000) {
+
+        member* m = build_member("", "127.0.0.1", port, "/Users/rcopstein/Desktop/s2");
+        add_member(m);
+
         char sample[256] = "jreq";
         char *aux = (char *) (&sample) + 4;
         size_t size = serialize_member(m, &aux);
 
         server_send("127.0.0.1", 4000, sample, (uint16_t)(size + 4));
+    }
+    else {
+
+        member* m = build_member("AA", "127.0.0.1", port, "/Users/rcopstein/Desktop/s1");
+        add_member(m);
+
     }
 
     pthread_join(server_thread, NULL);

@@ -9,7 +9,7 @@ int update_nfs();
 int remove_nfs_dir(char* path);
 
 // Add NFS recipient
-int add_nfs_recp(char* path, char* recipient);
+int add_nfs_recp(member* m, char* recipient);
 
 // Remove NFS recipient
 int remove_nfs_recp(char* path, char* recipient);

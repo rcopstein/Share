@@ -8,7 +8,18 @@
 #include "nfs_ops.h"
 #include "members.h"
 
-const char exportsFile[] = "/etc/exports";
+static const char exportsFile[] = "/etc/exports";
+static const char mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
+
+// Build NFS Path for member
+static char* build_nfs_path(member* m, size_t *size) {
+
+    *size = m->prefix_size + m->id_size + 2;
+    char* path = (char *) malloc(*size);
+
+    sprintf(path, "%s/%s", m->prefix, m->id);
+    return path;
+}
 
 // Update NFS exports
 int update_nfs() {
@@ -38,15 +49,16 @@ static char* _add_nfs_recp(char* line) {
     return nline;
 
 }
-int add_nfs_recp(char* path, char* recipient) {
+int add_nfs_recp(member* m, char* recipient) {
 
-    _path = path;
+    size_t size;
+    _path = build_nfs_path(m, &size);
     _ip = recipient;
 
-    if (fops_update_line(exportsFile, path, _add_nfs_recp))
+    if (fops_update_line(exportsFile, _path, _add_nfs_recp))
         return error("Failed to update line!\n", NULL);
 
-    return 0;
+    return update_nfs();
 }
 
 // Remove NFS recipient
@@ -87,17 +99,23 @@ int remove_nfs_recp(char* path, char* recipient) {
     if (fops_update_line(exportsFile, path, _remove_nfs_recp))
         return error("Failed to update line!\n", NULL);
 
-    return 0;
+    return update_nfs();
 }
 
 // Mount an NFS view
 int mount_nfs_dir(member* m) {
 
-    char* command;
-    asprintf(&command, "sudo mount -t nfs -o retrycnt=0 %s:%s/%s %s/", m->ip, m->prefix, m->id, m->id);
+    size_t size;
+    char* path = build_nfs_path(m, &size);
+
+    char* command = (char *) malloc(size + strlen(mountCmd) + m->id_size);
+    sprintf(command, mountCmd, m->ip, path, m->id);
     printf("> %s\n", command);
+
     int result = system(command);
+
     free(command);
+    free(path);
 
     return result;
 
