@@ -6,9 +6,25 @@
 #include "members.h"
 #include "output.h"
 
-member* members = NULL;
-uint16_t child_count = 0;
-uint16_t members_count = 0;
+// Member struct
+typedef struct __member {
+
+    char* id;
+    char ip[16];
+    char* prefix;
+    uint16_t port;
+    uint16_t id_size;
+    uint16_t prefix_size;
+
+    struct __member *next;
+
+} _member;
+
+// Variables
+static const char filepath[] = "metadata/members.txt";
+
+static _member* members = NULL;
+static uint16_t child_count = 0;
 
 // Generate a new unique ID following the pattern
 char* generate_member_id() {
@@ -23,32 +39,91 @@ char* generate_member_id() {
 
 }
 
-// Reads members from the members file
-member* read_members(char* path) {
+// Remove a member from the members list
+void remove_member(char* id) {
 
-    char buffer[256];
-    FILE* file = fopen(path, "r");
-    if (file == NULL) return NULL;
+    _member** aux = &members;
 
-    member m;
-    m.next = NULL;
-    member* last = &m;
-
-    while (fgets(buffer, 255, file)) {
-        member* next = (member*) malloc(sizeof(member));
-        parse_member(buffer, next);
-        last->next = next;
-        last = next;
+    while (*aux != NULL) {
+        if (strcmp((*aux)->id, id) == 0) {
+            _member* m = *aux;
+            *aux = (*aux)->next;
+            free(m);
+            return;
+        }
+        *aux = (*aux)->next;
     }
 
-    return m.next;
+}
+
+// Add a member to the members list
+void add_member(member* member) {
+
+    _member* m = (_member *) malloc(sizeof(_member));
+    memcpy(m, member, sizeof(member));
+
+    m->next = members->next;
+    members->next = m;
+
+}
+
+// Load members from file
+int member_load_from_file() {
+
+    char buffer[256];
+    FILE* file = fopen(filepath, "r");
+    if (file == NULL) return error("Failed to open file!\n", NULL);
+
+    _member** head = &members;
+
+    while (fgets(buffer, 255, file)) {
+        _member* next = (_member*) malloc(sizeof(_member));
+        deserialize_member(buffer, next);
+
+        *head = next;
+        *head = next->next;
+    }
+
+    return 0;
+}
+
+// Return the current member
+member* get_current_member() {
+
+    return (member*) members;
+
+}
+
+// Return a member with a given id
+member* get_certain_member(char* id) {
+
+    _member* aux = members;
+
+    while (aux != NULL) {
+        if (strcmp(aux->id, id) == 0) return (member *) aux;
+        aux = aux->next;
+    }
+
+    return NULL;
+}
+
+// Execute an operation for each member
+void members_for_each(void (*funct)(member*)) {
+
+    _member* aux = members;
+
+    while (aux != NULL) {
+        funct((member *) aux);
+        aux = aux->next;
+    }
+
 }
 
 // Print a member to a string (assume buffer is big enough)
-uint32_t print_member(member* param, char** buffer) {
+int serialize_member(member *param, char **buffer) {
 
     // Calculate the size of the output
-    uint32_t size = sizeof(member) + 2; // 2 string terminators
+    uint32_t size = sizeof(member); // 2 string terminators
     size += param->prefix_size;
     size += param->id_size;
 
@@ -81,7 +156,7 @@ uint32_t print_member(member* param, char** buffer) {
 }
 
 // Read a line and build a 'member' struct
-int parse_member(char* input, member* container) {
+int deserialize_member(char *input, member *container) {
 
     uint16_t size = 0;
     char* aux = input;
@@ -108,7 +183,6 @@ int parse_member(char* input, member* container) {
     strncpy(container->prefix, aux, size);
     // aux += size;
 
-    container->next = NULL;
     return 0;
 }
 
@@ -119,7 +193,6 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
     strncpy(result->ip, ip, 15);
     result->port = port;
-    result->next = NULL;
 
     result->id_size = (uint16_t)(strlen(id) * sizeof(char));
     result->id = (char *) malloc(result->id_size + sizeof(char));

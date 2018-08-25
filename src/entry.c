@@ -69,7 +69,7 @@ uint8_t metadata_append_member(member param) {
 
     // Append the line
     char line[256];
-    print_member(&param, line);
+    serialize_member(&param, line);
     strcat(line, "\n");
     return (uint8_t) fops_append_line(METADATA_MEMBERS, line);
 
@@ -251,7 +251,7 @@ int proto_join(int sock) {
     // Send Members Entries
     aux = members;
     while (aux != NULL) {
-        print_member(aux, buffer);
+        serialize_member(aux, buffer);
         printf("%s\n", buffer);
 
         ssize_t res = send(sock, buffer, 255, 0);
@@ -279,7 +279,7 @@ int proto_join(int sock) {
     sprintf(message, "addm");
 
     member m = build_member(id, ip, port, pwd);
-    print_member(&m, message + 4);
+    serialize_member(&m, message + 4);
 
     printf("Sending message %s\n", message);
 
@@ -320,7 +320,7 @@ int proto_addm(int sock) {
 
     // Build the member
     member m;
-    if (parse_member(buffer, &m))
+    if (deserialize_member(buffer, &m))
         return error("Failed to parse member!\n", NULL);
 
     printf("Member built!\n");
@@ -367,7 +367,7 @@ int proto_addm(int sock) {
     fflush(stdout);
 
     int ssock = nops_open_connection(m.ip, m.port);
-    print_member(members, buffer);
+    serialize_member(members, buffer);
 
     if (send(ssock, buffer, 255, 0) < 0) {
         printf("Failed to send confirmation: %d!\n", errno);
@@ -555,7 +555,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
             return 1;
         }
 
-        if (parse_member(buffer, &m)) {
+        if (deserialize_member(buffer, &m)) {
             error("Failed to parse '%s' to a member!\n", buffer);
             nops_close_connection(sock);
             free(nfs_path);
@@ -613,7 +613,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
             continue;
         }
 
-        if (parse_member(buffer, &m)) {
+        if (deserialize_member(buffer, &m)) {
             error("Couldn't parse member from message: '%s'!\n", NULL);
             ++mems;
             continue;

@@ -12,12 +12,13 @@ void protocol_handle(char* content, uint16_t size) {
         return;
     }
 
-    printf("Here!\n");
-
     char protocol[4];
     strncpy(protocol, content, 4);
+    content += 4;
 
-    if (strncmp("join", protocol, 4) == 0 || 1) protocol_join_received(content + 4);
+    if (strncmp("jreq", protocol, 4) == 0) protocol_join_req(content);
+    else if (strncmp("jrep", protocol, 4) == 0) protocol_join_rep(content);
+
     else warning("Received unknown protocol '%s'\n", protocol);
 
 }

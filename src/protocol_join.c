@@ -6,8 +6,10 @@
 #include "nfs_ops.h"
 #include "members.h"
 #include "output.h"
+#include "server.h"
 
-static void clean_protocol_join_received(int depth, char* id) {
+// Handle Join Request
+static void clean_protocol_join_req(int depth, char *id) {
     switch (depth) {
         case 1:
             free(id);
@@ -16,41 +18,114 @@ static void clean_protocol_join_received(int depth, char* id) {
             break;
     }
 }
-
-void protocol_join_received(char* message) {
-
-    // Temporary
-    members = build_member("AA", "127.000.000.111", 4000, "/Users/rcopstein/Desktop");
-    member result;
-
-    char* buffer = NULL;
-    print_member(members, &buffer);
-
-    members->port = 0;
-    parse_member(buffer, &result);
-
-    printf("%d %s %s %d %d %s\n", result.id_size, result.id, result.ip, result.port, result.prefix_size, result.prefix);
-    ++members_count;
-    return;
+void protocol_join_req(char *message) {
 
     // Parse member in the message
     member m;
-    if (parse_member(message, &m)) {
+    if (deserialize_member(message, &m)) {
         error("Invalid member format in join protocol!\n", NULL);
-        clean_protocol_join_received(0, NULL);
+        clean_protocol_join_req(0, NULL);
         return;
     }
 
     // Add it to NFS permissions
     if (add_nfs_recp(members->prefix, m.ip)) {
         error("Failed to add ip as NFS recipient!\n", NULL);
-        clean_protocol_join_received(0, NULL);
+        clean_protocol_join_req(0, NULL);
         return;
     }
 
     // Assign an ID for it
     char* id = generate_member_id();
+    size_t id_size = strlen(id);
 
-    // TO-DO Find a way to send numbers in a nice way
+    // Create message with data
+    uint16_t size = members->id_size + members->prefix_size + sizeof(member);
+    size += id_size + sizeof(uint16_t);
+
+    char* reply = (char *) malloc(size);
+    memcpy(reply, &id_size, sizeof(uint16_t));
+    memcpy(reply + sizeof(uint16_t), id, id_size);
+
+    char* aux = reply + id_size + sizeof(uint16_t);
+    serialize_member(members, &(aux));
+
+    // Reply the join
+    /*if (server_send(m.ip, m.port, message, size)) {
+        error("Failed to reply to message!\n", NULL);
+        return;
+    }*/
+
+}
+
+// Handle Join Reply
+static void clean_protocol_join_rep(int depth) {
+
+}
+void protocol_join_rep(char *message) {
+
+    // Read the ID size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read the ID
+    char *id = (char *) malloc(size);
+    memcpy(message, id, size);
+    message += size;
+
+    // Read the member replied
+    member m;
+    if (deserialize_member(message, &m)) {
+        error("Failed to parse member from input!\n", NULL);
+        free(id);
+        return;
+    }
+
+    // Mount NFS
+    if (mount_nfs_dir(&m)) {
+        error("Failed to mount NFS folder!\n", NULL);
+        free(id);
+        return;
+    }
+
+    // Add NFS recipient
+    if (add_nfs_recp(members->prefix, m.ip)) {
+        error("Failed to add NFS recipient!\n", NULL);
+        free(id);
+        return;
+    }
+
+    // Send acknowledgement
+    char ack[19];
+    memcpy(ack, "jack", 4);
+    memcpy(ack + 4, m.ip, 15);
+
+    if (server_send(m.ip, m.port, ack, 19)) {
+        error("Failed to send acknowledge!\n", NULL);
+        free(id);
+        return;
+    }
+
+}
+
+// Handle Join Acknowledge
+static void clean_protocol_join_ack(int depth) {
+
+}
+void protocol_join_ack(char *message) {
+
+    // Read ID size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read ID
+    char* id = (char *) malloc(size);
+    memcpy(id, message, size);
+
+    // Find member with that ID
+
+    // Mount member NFS dir
 
 }

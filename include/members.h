@@ -14,22 +14,22 @@ typedef struct _member {
     uint16_t id_size;
     uint16_t prefix_size;
 
-    struct _member *next;
-
 } member;
-
-// Current members
-extern member* members;
-extern uint16_t child_count;
-extern uint16_t members_count;
 
 // Define parsing methods
 char* generate_member_id();
 
-member* read_members(char *path);
+int member_load_from_file();
 
-int parse_member(char* input, member* container);
+member* get_current_member();
+member* get_certain_member(char* id);
 
-uint32_t print_member(member* param, char** buffer);
+void remove_member(char* id);
+void add_member(member* member);
+
+void members_for_each(void (*funct)(member*));
+
+int serialize_member(member *param, char **buffer);
+int deserialize_member(char *input, member *container);
 
 member* build_member(char* id, char* ip, uint16_t port, char* prefix);
