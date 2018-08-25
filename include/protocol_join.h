@@ -1,5 +1,5 @@
 #pragma once
 
-void protocol_join_req(char *message);
-void protocol_join_rep(char *message);
-void protocol_join_ack(char *message);
+void handle_join_req(char *message);
+void handle_join_rep(char *message);
+void handle_join_ack(char *message);
