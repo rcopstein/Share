@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdint.h>
+#include <errno.h>
 
 #include "output.h"
 #include "nops.h"
@@ -73,7 +74,7 @@ int nops_open_connection(char* ip, uint16_t port) {
 
     printf("Waiting for %s:%d to accept!\n", ip, port);
     if (connect(sock, (struct sockaddr *)&addr, sizeof(addr))) {
-        error("Failed to connect to socket!\n", NULL);
+        printf("Failed to connect to socket! Error: %d\n", errno);
         return -1;
     }
 

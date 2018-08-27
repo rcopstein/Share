@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 #include "protocol_join.h"
 #include "nfs_ops.h"
@@ -9,6 +10,74 @@
 #include "output.h"
 #include "server.h"
 #include "fops.h"
+
+// Send Join Request
+int send_join_req(char* ip, uint16_t port, member* m) {
+
+    char protocol[] = "jreq";
+    size_t size = size_of_member(m);
+    size_t protocol_size = strlen(protocol);
+
+    char* message = (char*) malloc(size + protocol_size);
+    memcpy(message, protocol, protocol_size);
+
+    char* aux = message + protocol_size;
+    serialize_member(m, &aux);
+
+    return server_send(ip, port, message, size + protocol_size);
+}
+
+// Send Join Reply
+int send_join_rep(char* ip, uint16_t port, char* id, size_t id_size, member* m) {
+
+    char protocol[] = "jrep";
+    size_t size = size_of_member(m);
+    size_t protocol_size = strlen(protocol);
+
+    size += sizeof(uint16_t);
+    size += protocol_size;
+    size += id_size;
+
+    char* message = (char *) malloc(size);
+    char* aux = message;
+
+    memcpy(aux, protocol, protocol_size); // Copy Protocol
+    aux += protocol_size;
+
+    memcpy(aux, &id_size, sizeof(uint16_t)); // Copy ID size
+    aux += sizeof(uint16_t);
+
+    memcpy(aux, id, id_size); // Copy ID
+    aux += id_size;
+
+    serialize_member(m, &aux); // Serialize member
+
+    return server_send(ip, port, message, size);
+}
+
+// Send Join Ack
+int send_join_ack(char* ip, uint16_t port, char* id, size_t id_size) {
+
+    char protocol[] = "jack";
+    size_t protocol_size = strlen(protocol);
+
+    size_t size = protocol_size + sizeof(uint16_t) + id_size;
+
+    char* message = (char *) malloc(size);
+    char* aux = message;
+
+    memcpy(aux, protocol, protocol_size);
+    aux += protocol_size;
+
+    memcpy(aux, &id_size, sizeof(uint16_t));
+    aux += sizeof(uint16_t);
+
+    memcpy(aux, id, id_size);
+    // aux += id_size;
+
+    return server_send(ip, port, message, size);
+}
+
 
 // Handle Join Request
 static void clean_handle_join_req(int depth, char *path, char *ip, char *id) {
@@ -56,25 +125,12 @@ void handle_join_req(char *message) {
         return;
     }
 
-    // Create message with data
-    size_t size = size_of_member(current);
-    size += id_size + sizeof(uint16_t) + 4 * sizeof(char);
-
-    char* reply = (char *) malloc(size);
-    memcpy(reply, "jrep", 4 * sizeof(char));
-    memcpy(reply + 4, &id_size, sizeof(uint16_t));
-    memcpy(reply + 4 + sizeof(uint16_t), id, id_size);
-
-    char* aux = reply + 4 + id_size + sizeof(uint16_t);
-    serialize_member(current, &aux);
-
     // Reply the join
-    if (server_send(m.ip, m.port, reply, size)) {
-        error("Failed to reply to message!\n", NULL);
+    if (send_join_rep(m.ip, m.port, id, id_size, current)) {
+        error("Failed to send join reply!\n", NULL);
         clean_handle_join_req(2, current->prefix, m.ip, m.id);
         return;
     }
-
 }
 
 // Handle Join Reply
@@ -112,9 +168,12 @@ void handle_join_rep(char *message) {
     current->id_size = size;
     current->id = id;
 
+    printf("My id is: %s\n", id);
+
     // Create folder for itself
     if (fops_make_dir(id)) {
         error("Failed to create folder to self!\n", NULL);
+        printf("%d\n", errno);
         return;
     }
     printf("Created folder '%s'\n", id);
@@ -152,16 +211,13 @@ void handle_join_rep(char *message) {
     }
 
     // Send acknowledgement
-    char ack[size + 4 + sizeof(uint16_t)];
-    memcpy(ack, "jack", 4);
-    memcpy(ack + 4, &size, sizeof(uint16_t));
-    memcpy(ack + 4 + sizeof(uint16_t), id, size);
-
-    if (server_send(m.ip, m.port, ack, size + 4 + sizeof(uint16_t))) {
-        error("Failed to send acknowledge!\n", NULL);
+    if (send_join_ack(m.ip, m.port, id, size)) {
+        error("Failed to send join acknowledgement!\n", NULL);
         clean_handle_join_rep(5, current->prefix, m.ip, id, m.id);
         return;
     }
+
+    members_for_each(print_member);
 }
 
 // Handle Join Acknowledge
@@ -190,69 +246,6 @@ void handle_join_ack(char *message) {
         free(id);
         return;
     }
-}
 
-// Send Join Request
-int send_join_req(char* ip, uint16_t port, member* m) {
-
-    // Test if sizeof(protocol) returns 4 or 5!!!!
-
-    size_t size = size_of_member(m);
-    char protocol[] = "jreq";
-
-    char* message = (char*) malloc(size + sizeof(protocol));
-    memcpy(message, protocol, sizeof(protocol));
-
-    char* aux = message + sizeof(protocol);
-    serialize_member(m, &aux);
-
-    return server_send(ip, port, message, size + sizeof(protocol));
-}
-
-// Send Join Reply
-int send_join_rep(char* ip, uint16_t port, char* id, uint16_t id_size, member* m) {
-
-    char protocol[] = "jrep";
-    size_t size = size_of_member(m);
-
-    size += sizeof(protocol);
-    size += sizeof(uint16_t);
-    size += id_size;
-
-    char* message = (char *) malloc(size);
-    char* aux = message;
-
-    memcpy(aux, protocol, sizeof(protocol)); // Copy Protocol
-    aux += sizeof(protocol);
-
-    memcpy(aux, id_size, sizeof(uint16_t)); // Copy ID size
-    aux += sizeof(uint16_t);
-
-    memcpy(aux, id, id_size); // Copy ID
-    aux += id_size;
-
-    serialize_member(m, &aux); // Serialize member
-
-    return server_send(ip, port, message, size);
-}
-
-// Send Join Ack
-int send_join_ack(char* ip, uint16_t port, char* id, uint16_t id_size) {
-
-    char protocol[] = "jack";
-    size_t size = sizeof(protocol) + sizeof(uint16_t) + id_size;
-
-    char* message = (char *) malloc(size);
-    char* aux = message;
-
-    memcpy(aux, protocol, sizeof(protocol));
-    aux += sizeof(protocol);
-
-    memcpy(aux, id_size, sizeof(uint16_t));
-    aux += sizeof(uint16_t);
-
-    memcpy(aux, id, id_size);
-    // aux += id_size;
-
-    return server_send(ip, port, message, size);
+    members_for_each(print_member);
 }

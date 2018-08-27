@@ -21,6 +21,52 @@ static const char filepath[] = "metadata/members.txt";
 static _member* members = NULL;
 static uint16_t child_count = 0;
 
+// Initializes members file and information
+int initialize_metadata_members(member *m) {
+
+    FILE* file;
+
+    if ((file = fopen(filepath, "wb+")) == NULL)
+        return error("Failed to open file '%s'!\n", (char *)filepath);
+
+    char* line = NULL;
+    size_t size = serialize_member(m, &line);
+    if (line == NULL) {
+        fclose(file);
+        remove(filepath);
+        return error("Failed to serialize member!\n", NULL);
+    }
+
+    fwrite(line, size, 1, file);
+    add_member(m);
+    fclose(file);
+    free(line);
+
+    members_for_each(print_member);
+    return 0;
+}
+
+// Removes the metadata members file
+int remove_metadata_members() {
+
+    members_for_each(free_member);
+    members = NULL;
+
+    return remove(filepath);
+
+}
+
+// Prints a member to stdout
+void print_member(member* m) {
+
+    printf("ID: %s\n", m->id);
+    printf("Prefix: %s\n", m->prefix);
+    printf("IP: %s\n", m->ip);
+    printf("Port: %d\n", m->port);
+    printf("\n");
+
+}
+
 // Return the size of the contents of a member (without string terminators)
 size_t size_of_member(member* m) {
 
@@ -114,6 +160,7 @@ void add_member(member* memb) {
         members->next = m;
     } else {
         members = m;
+        m->next = NULL;
     }
 
 }
@@ -155,7 +202,6 @@ size_t serialize_member(member *param, char **buffer) {
 
     // Calculate the size of the output
     size_t size = size_of_member(param);
-    printf("Size is: %zu\n", size);
 
     // Allocate the buffer, if necessary
     if (*buffer == NULL) *buffer = (char *) malloc(size);

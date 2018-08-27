@@ -17,7 +17,11 @@ typedef struct _member {
 } member;
 
 // Define methods
+int initialize_metadata_members(member *m);
+int remove_metadata_members();
+
 char* generate_member_id();
+void print_member(member* m);
 size_t size_of_member(member* m);
 
 void free_member(member* m);

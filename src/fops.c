@@ -25,12 +25,12 @@ static bool matches(const char *pre, const char *str) {
     return false;
 }
 
-// New
+// Methods
 
 int fops_make_dir(const char* dirname) {
 
     struct stat st;
-    if (stat(dirname, &st) && errno != ENOENT) {
+    if (!stat(dirname, &st) || errno != ENOENT) {
         return error("Directory '%s' already exists!\n", (char *) dirname);
     }
 
@@ -111,6 +111,7 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
     int result = 0;
     if (rename(tempPath, filename)) {
         result = error("Failed to overwrite original file '%s'!\n", (char *) filename);
+        printf("Overwrite original file error: %d\n", errno);
         remove(tempPath);
     }
 

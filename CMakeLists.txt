@@ -17,7 +17,7 @@ include_directories("${CMAKE_SOURCE_DIR}/include")
 file(GLOB SOURCES "src/*.c")
 
 include_directories(${FUSE_INCLUDE_DIR})
-add_executable(share src/server.c src/protocols.c src/protocol_join.c src/members.c src/output.c src/nops.c src/fops.c src/nfs_ops_darwin.c)
+add_executable(share ${SOURCES})
 
 if(THREADS_HAVE_PTHREAD_ARG)
     target_compile_options(my_app PUBLIC "-pthread")

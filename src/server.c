@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/socket.h>
 #include <ctype.h>
+#include <errno.h>
 
 #include "protocols.h"
 #include "output.h"
@@ -14,17 +15,33 @@
 
 // Variables
 static int stop = 0;
+static uint16_t port;
 static int server_socket;
-static pthread_t server_thread;
+static pthread_t server_thread = 0;
 
-// Server Cleanup
-void server_cleanup(int signal) {
+// Wait for the server to finish
+void server_wait() {
+
+    pthread_join(server_thread, NULL);
+
+}
+
+// Stop the Server
+void server_stop() {
+
     stop = 1;
     nops_close_connection(server_socket);
+    server_wait();
+
+}
+
+// Server Cleanup
+static void server_cleanup(int signal) {
+    server_stop();
 }
 
 // Starts Server at Port
-void* server_start(void* vport) {
+void* _server_start(void* vport) {
 
     int client_socket;
     struct sockaddr_in client;
@@ -33,11 +50,10 @@ void* server_start(void* vport) {
     uint16_t port = *((uint16_t*)vport);
 
     if ((server_socket = nops_listen_at(port)) < 0) {
-        error("Failed to listen at port!", NULL);
+        error("Failed to listen at port!\n", NULL);
+        printf("Error: %d\n", errno);
         return NULL;
     }
-
-    signal(SIGINT, &server_cleanup);
 
     for (;;) {
 
@@ -77,7 +93,15 @@ void* server_start(void* vport) {
 
     return NULL;
 }
+int server_start(uint16_t _port) {
 
+    port = _port;
+    if (signal(SIGINT, &server_cleanup) == SIG_ERR) return 1;
+    return pthread_create(&server_thread, NULL, _server_start, &port);
+
+}
+
+// Send a message using the server
 int server_send(char* ip, uint16_t port, void* message, size_t size) {
 
     // Open the connection socket
@@ -92,38 +116,6 @@ int server_send(char* ip, uint16_t port, void* message, size_t size) {
     }
 
     nops_close_connection(sock);
-    return 0;
-
-}
-
-int main(int argc, char** argv) {
-
-    if (argc < 2) return 1;
-    uint16_t port = (uint16_t) strtol(argv[1], NULL, 10);
-
-    printf("My port is %d\n", port);
-    pthread_create(&server_thread, NULL, server_start, &port);
-
-    if (port == 5000) {
-
-        member* m = build_member("", "127.0.0.1", port, "/Users/rcopstein/Desktop/s2");
-        add_member(m);
-
-        char sample[256] = "jreq";
-        char *aux = (char *) (&sample) + 4;
-        size_t size = serialize_member(m, &aux);
-
-        server_send("127.0.0.1", 4000, sample, (uint16_t)(size + 4));
-    }
-    else {
-
-        member* m = build_member("AA", "127.0.0.1", port, "/Users/rcopstein/Desktop/s1");
-        add_member(m);
-
-    }
-
-    pthread_join(server_thread, NULL);
-    printf("\nClosing gracefully!\n");
     return 0;
 
 }
