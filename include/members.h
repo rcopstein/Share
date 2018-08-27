@@ -39,3 +39,5 @@ size_t serialize_member(member *param, char **buffer);
 int deserialize_member(char *input, member *container);
 
 member* build_member(char* id, char* ip, uint16_t port, char* prefix);
+
+char* build_members_message();

@@ -284,3 +284,39 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
     return result;
 
 }
+
+// Build a message with all the known members
+char* build_members_message() {
+
+    uint16_t count = 0;
+    size_t size = sizeof(uint16_t);
+
+    _member* m = members;
+    while (m != NULL) {
+        size += size_of_member(m->content); // Count the size of the message
+        ++count; // Count the number of members
+        m = m->next;
+    }
+
+    char* message = (char *) malloc(size);
+    char* aux = message;
+
+    if (message == NULL) {
+        error("Failed to allocate memory!\n", NULL);
+        return NULL;
+    }
+
+    memcpy(aux, &count, sizeof(uint16_t)); // Copy the number of members
+    aux += sizeof(uint16_t);
+
+    m = members;
+    while (m != NULL) {
+        size_t s = serialize_member(m->content, &aux); // Copy the member
+        aux += s;
+
+        m = m->next;
+    }
+
+    return message;
+
+}
