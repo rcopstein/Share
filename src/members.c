@@ -3,9 +3,14 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <nops.h>
+#include <zconf.h>
 
 #include "members.h"
 #include "output.h"
+#include "server.h"
 
 // Member struct
 typedef struct __member {
@@ -13,13 +18,47 @@ typedef struct __member {
     member *content;
     struct __member *next;
 
+    int stop;
+    uint16_t state;
+    sem_t* editable;
+    int availability;
+    int connection_socket;
+    pthread_t detector_thread;
+
 } _member;
 
 // Variables
 static const char filepath[] = "metadata/members.txt";
 
+static member* self = NULL;
 static _member* members = NULL;
 static uint16_t child_count = 0;
+
+// MOVE THIS SOMEWHERE ELSE!
+void* _activity_detector(void* member) {
+
+    _member* m = (_member *) member;
+
+    for (int i = 0; !m->stop; ++i) {
+
+        if (m->availability > 4) {
+            printf("%s is down!\n", m->content->id);
+        }
+
+        printf("%s From Another Thread!\n", m->content->id);
+
+        sem_wait(m->editable);
+        server_send(m->content->ip, m->content->port, "ping", 4);
+        m->availability += 1;
+        sem_post(m->editable);
+
+        sleep(10);
+    }
+
+    printf("'%s' finished successfully!\n", m->content->id);
+    return NULL;
+
+}
 
 // Initializes members file and information
 int initialize_metadata_members(member *m) {
@@ -38,22 +77,14 @@ int initialize_metadata_members(member *m) {
     }
 
     fwrite(line, size, 1, file);
-    add_member(m);
     fclose(file);
     free(line);
 
+    self = (member *) malloc(sizeof(member));
+    memcpy(self, m, sizeof(member));
+
     members_for_each(print_member);
     return 0;
-}
-
-// Removes the metadata members file
-int remove_metadata_members() {
-
-    members_for_each(free_member);
-    members = NULL;
-
-    return remove(filepath);
-
 }
 
 // Prints a member to stdout
@@ -84,6 +115,13 @@ void free_member(member *m) {
 }
 static void _free_member(_member *m) {
 
+    sem_wait(m->editable);
+
+    m->stop = 1;
+    nops_close_connection(m->connection_socket);
+    pthread_join(m->detector_thread, NULL);
+
+    sem_unlink(m->content->id);
     free_member(m->content);
     free(m);
 
@@ -155,20 +193,23 @@ void add_member(member* memb) {
     memcpy(n, memb, sizeof(member));
     m->content = n;
 
-    if (members != NULL) {
-        m->next = members->next;
-        members->next = m;
-    } else {
-        members = m;
-        m->next = NULL;
-    }
+    m->stop = 0;
+    m->state = 0;
+    m->availability = 0;
+    m->connection_socket = 0;
+    m->editable = sem_open(n->id, O_CREAT, 0200, 1);
+    pthread_create(&(m->detector_thread), NULL, _activity_detector, m);
+
+    _member** head = &members;
+    m->next = *head;
+    *head = m;
 
 }
 
 // Return the current member
 member* get_current_member() {
 
-    return members->content;
+    return self;
 
 }
 
@@ -191,9 +232,33 @@ void members_for_each(void (*funct)(member*)) {
     _member* aux = members;
 
     while (aux != NULL) {
-        funct(aux->content);
+        member* curr = aux->content;
         aux = aux->next;
+
+        funct(curr);
     }
+
+}
+void _members_for_each(void (*funct)(_member*)) {
+
+    _member* aux = members;
+
+    while (aux != NULL) {
+        _member* curr = aux;
+        aux = aux->next;
+        funct(curr);
+    }
+
+}
+
+// Removes the metadata members file
+int remove_metadata_members() {
+
+    _members_for_each(_free_member);
+    free_member(self);
+    members = NULL;
+
+    return remove(filepath);
 
 }
 
@@ -318,5 +383,45 @@ char* build_members_message() {
     }
 
     return message;
+
+}
+
+uint8_t member_get_state(member* m, uint16_t* state) {
+
+    // Get internal member
+    _member* internal = members;
+    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
+    if (internal == NULL) return 0;
+
+    // Set the result
+    *state = internal->state & *state;
+
+    return 0;
+
+}
+uint8_t member_set_state(member* m, uint16_t* state) {
+
+    // Get internal member
+    _member* internal = members;
+    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
+    if (internal == NULL) return 0;
+
+    // Set the value of state
+    internal->state = *state = *state | internal->state;
+
+    return 0;
+
+}
+uint8_t member_unset_state(member* m, uint16_t* state) {
+
+    // Get internal member
+    _member* internal = members;
+    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
+    if (internal == NULL) return 0;
+
+    // Set the value of state
+    internal->state = *state = *state ^ internal->state; // THIS IS WRONG!
+
+    return 0;
 
 }

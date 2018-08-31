@@ -33,6 +33,11 @@ void server_stop() {
     nops_close_connection(server_socket);
     server_wait();
 
+    remove_metadata_members();
+
+    printf("Finished!\n");
+    fflush(0);
+
 }
 
 // Server Cleanup
