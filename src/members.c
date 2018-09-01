@@ -7,58 +7,29 @@
 #include <semaphore.h>
 #include <nops.h>
 #include <zconf.h>
+#include <background.h>
 
+#include "protocol_mont.h"
 #include "members.h"
 #include "output.h"
 #include "server.h"
 
+
 // Member struct
-typedef struct __member {
+typedef struct _mlist {
 
     member *content;
-    struct __member *next;
+    struct _mlist *next;
 
-    int stop;
-    uint16_t state;
-    sem_t* editable;
-    int availability;
-    int connection_socket;
-    pthread_t detector_thread;
-
-} _member;
+} mlist;
 
 // Variables
 static const char filepath[] = "metadata/members.txt";
 
 static member* self = NULL;
-static _member* members = NULL;
+static mlist* members = NULL;
 static uint16_t child_count = 0;
 
-// MOVE THIS SOMEWHERE ELSE!
-void* _activity_detector(void* member) {
-
-    _member* m = (_member *) member;
-
-    for (int i = 0; !m->stop; ++i) {
-
-        if (m->availability > 4) {
-            printf("%s is down!\n", m->content->id);
-        }
-
-        printf("%s From Another Thread!\n", m->content->id);
-
-        sem_wait(m->editable);
-        server_send(m->content->ip, m->content->port, "ping", 4);
-        m->availability += 1;
-        sem_post(m->editable);
-
-        sleep(10);
-    }
-
-    printf("'%s' finished successfully!\n", m->content->id);
-    return NULL;
-
-}
 
 // Initializes members file and information
 int initialize_metadata_members(member *m) {
@@ -80,10 +51,10 @@ int initialize_metadata_members(member *m) {
     fclose(file);
     free(line);
 
-    self = (member *) malloc(sizeof(member));
-    memcpy(self, m, sizeof(member));
+    self = m;
+    self->state = 0;
+    self->editable = sem_open(m->id, O_CREAT, 0200, 1);
 
-    members_for_each(print_member);
     return 0;
 }
 
@@ -108,49 +79,17 @@ size_t size_of_member(member* m) {
 // Frees a member from memory
 void free_member(member *m) {
 
+    sem_unlink(m->id);
     free(m->prefix);
     free(m->id);
     free(m);
 
 }
-static void _free_member(_member *m) {
+static void _free_member(mlist *m) {
 
-    sem_wait(m->editable);
-
-    m->stop = 1;
-    nops_close_connection(m->connection_socket);
-    pthread_join(m->detector_thread, NULL);
-
-    sem_unlink(m->content->id);
     free_member(m->content);
     free(m);
 
-}
-
-// Load members from file
-int member_load_from_file() {
-
-    char buffer[256];
-    FILE* file = fopen(filepath, "r");
-    if (file == NULL) return error("Failed to open file!\n", NULL);
-
-    _member** head = &members;
-
-    while (fgets(buffer, 255, file)) {
-
-        member* m = (member*) malloc(sizeof(member));
-        deserialize_member(buffer, m);
-
-        _member* next = (_member*) malloc(sizeof(_member));
-        next->content = m;
-        next->next = NULL;
-
-        *head = next;
-        *head = next->next;
-    }
-
-    if (*head) (*head)->next = NULL;
-    return 0;
 }
 
 // Generate a new unique ID following the pattern
@@ -170,11 +109,11 @@ char* generate_member_id() {
 // Remove a member from the members list
 void remove_member(char* id) {
 
-    _member** aux = &members;
+    mlist** aux = &members;
 
     while (*aux != NULL) {
         if (strcmp((*aux)->content->id, id) == 0) {
-            _member* m = *aux;
+            mlist* m = *aux;
             *aux = (*aux)->next;
             _free_member(m);
             return;
@@ -187,22 +126,14 @@ void remove_member(char* id) {
 // Add a member to the members list
 void add_member(member* memb) {
 
-    _member* m = (_member *) malloc(sizeof(_member));
-    member* n = (member *) malloc(sizeof(member));
+    mlist* m = (mlist *) malloc(sizeof(mlist));
+    m->content = memb;
 
-    memcpy(n, memb, sizeof(member));
-    m->content = n;
-
-    m->stop = 0;
-    m->state = 0;
-    m->availability = 0;
-    m->connection_socket = 0;
-    m->editable = sem_open(n->id, O_CREAT, 0200, 1);
-    pthread_create(&(m->detector_thread), NULL, _activity_detector, m);
-
-    _member** head = &members;
+    mlist** head = &members;
     m->next = *head;
     *head = m;
+
+    start_background(memb);
 
 }
 
@@ -216,7 +147,7 @@ member* get_current_member() {
 // Return a member with a given id
 member* get_certain_member(char* id) {
 
-    _member* aux = members;
+    mlist* aux = members;
 
     while (aux != NULL) {
         if (strcmp(aux->content->id, id) == 0) return aux->content;
@@ -229,7 +160,7 @@ member* get_certain_member(char* id) {
 // Execute an operation for each member
 void members_for_each(void (*funct)(member*)) {
 
-    _member* aux = members;
+    mlist* aux = members;
 
     while (aux != NULL) {
         member* curr = aux->content;
@@ -239,12 +170,12 @@ void members_for_each(void (*funct)(member*)) {
     }
 
 }
-void _members_for_each(void (*funct)(_member*)) {
+void _members_for_each(void (*funct)(mlist*)) {
 
-    _member* aux = members;
+    mlist* aux = members;
 
     while (aux != NULL) {
-        _member* curr = aux;
+        mlist* curr = aux;
         aux = aux->next;
         funct(curr);
     }
@@ -254,10 +185,16 @@ void _members_for_each(void (*funct)(_member*)) {
 // Removes the metadata members file
 int remove_metadata_members() {
 
+    printf("1");
     _members_for_each(_free_member);
+
+    printf("2");
     free_member(self);
+
+    printf("3");
     members = NULL;
 
+    printf("4");
     return remove(filepath);
 
 }
@@ -327,6 +264,9 @@ int deserialize_member(char *input, member *container) {
     container->prefix[size] = '\0';
     // aux += size;
 
+    container->state = 0;
+    container->editable = sem_open(container->id, O_CREAT, 0200, 1);
+
     return 0;
 }
 
@@ -346,6 +286,9 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
     result->prefix = (char *) malloc(result->prefix_size + sizeof(char));
     strcpy(result->prefix, prefix);
 
+    result->state = 0;
+    result->editable = sem_open(id, O_CREAT, 0200, 1);
+
     return result;
 
 }
@@ -356,7 +299,7 @@ char* build_members_message() {
     uint16_t count = 0;
     size_t size = sizeof(uint16_t);
 
-    _member* m = members;
+    mlist* m = members;
     while (m != NULL) {
         size += size_of_member(m->content); // Count the size of the message
         ++count; // Count the number of members
@@ -386,42 +329,27 @@ char* build_members_message() {
 
 }
 
-uint8_t member_get_state(member* m, uint16_t* state) {
+// Manage Member State
+uint16_t member_get_state(member* m, uint16_t state) {
 
-    // Get internal member
-    _member* internal = members;
-    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
-    if (internal == NULL) return 0;
-
-    // Set the result
-    *state = internal->state & *state;
-
-    return 0;
+    return m->state & state;
 
 }
-uint8_t member_set_state(member* m, uint16_t* state) {
+uint16_t member_set_state(member* m, uint16_t state) {
 
-    // Get internal member
-    _member* internal = members;
-    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
-    if (internal == NULL) return 0;
+    sem_wait(m->editable);
+    uint16_t result = state | m->state;
+    sem_post(m->editable);
 
-    // Set the value of state
-    internal->state = *state = *state | internal->state;
-
-    return 0;
+    return result;
 
 }
-uint8_t member_unset_state(member* m, uint16_t* state) {
+uint16_t member_unset_state(member* m, uint16_t state) {
 
-    // Get internal member
-    _member* internal = members;
-    while (internal != NULL && strcmp(internal->content->id, m->id) != 0) internal = internal->next;
-    if (internal == NULL) return 0;
+    sem_wait(m->editable);
+    uint16_t result = ~state & m->state;
+    sem_post(m->editable);
 
-    // Set the value of state
-    internal->state = *state = *state ^ internal->state; // THIS IS WRONG!
-
-    return 0;
+    return result;
 
 }

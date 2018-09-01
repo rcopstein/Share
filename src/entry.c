@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <protocol_name.h>
 
 #include "fops.h"
 #include "nops.h"
@@ -166,7 +167,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     seteuid(0);
 
     // Send Join Request
-    if (send_join_req(server_ip, server_port, get_current_member())) return clean_join();
+    if (send_name_req(server_ip, server_port, get_current_member())) return clean_join();
 
     // Wait for server to complete
     server_wait();

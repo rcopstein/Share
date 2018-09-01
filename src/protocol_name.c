@@ -22,8 +22,10 @@ static const uint8_t protocol_size = 4;
 int send_name_req(char *ip, uint16_t port, member *m) {
 
     size_t size = size_of_member(m);
+    size += sizeof(uint8_t);
+    size += protocol_size;
 
-    char* message = (char*) malloc(size + protocol_size + sizeof(uint8_t));
+    char* message = (char*) malloc(size);
     char* aux = message;
 
     memcpy(aux, protocol, protocol_size); // Copy protocol
@@ -34,7 +36,7 @@ int send_name_req(char *ip, uint16_t port, member *m) {
 
     serialize_member(m, &aux); // Copy member
 
-    return server_send(ip, port, message, size + protocol_size);
+    return server_send(ip, port, message, size);
 
 }
 int send_name_rep(char *ip, uint16_t port, char *id, size_t id_size, member *m) {
@@ -88,6 +90,8 @@ void handle_name_req(char *message) {
     m.id_size = (uint16_t) id_size;
     add_member(&m);
 
+    printf("Generated ID: %s\n", m.id);
+
     // Reply the request
     if (send_name_rep(m.ip, m.port, id, id_size, current)) {
         error("Failed to send join reply!\n", NULL);
@@ -133,6 +137,10 @@ void handle_name_rep(char *message) {
         return;
     }
     add_member(&m);
+
+    // Set state to active
+    uint16_t flags = AVAIL;
+    member_set_state(current, flags);
 
 }
 

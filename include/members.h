@@ -3,12 +3,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <semaphore.h>
 
 #define AVAIL 0x01
 #define MOUNT 0x02
+#define RECP  0x04
 
 // Define member struct
 typedef struct _member {
+
+    uint16_t state;
+    sem_t* editable;
 
     char* id;
     char ip[16];
@@ -27,8 +32,6 @@ char* generate_member_id();
 void print_member(member* m);
 size_t size_of_member(member* m);
 
-int member_load_from_file();
-
 member* get_current_member();
 member* get_certain_member(char* id);
 
@@ -45,6 +48,6 @@ void free_member(member* m);
 
 char* build_members_message();
 
-uint8_t member_get_state(member* m, uint16_t* state);
-uint8_t member_set_state(member* m, uint16_t* state);
-uint8_t member_unset_state(member* m, uint16_t* state);
+uint16_t member_get_state(member* m, uint16_t state);
+uint16_t member_set_state(member* m, uint16_t state);
+uint16_t member_unset_state(member* m, uint16_t state);

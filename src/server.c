@@ -34,7 +34,6 @@ void server_stop() {
     server_wait();
 
     remove_metadata_members();
-
     printf("Finished!\n");
     fflush(0);
 
