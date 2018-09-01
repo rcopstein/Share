@@ -4,7 +4,9 @@
 #include <math.h>
 #include <protocol_mont.h>
 #include <zconf.h>
+#include <stdbool.h>
 
+#include "protocol_ping.h"
 #include "background.h"
 #include "server.h"
 
@@ -21,6 +23,7 @@ typedef struct _bg {
 
 // Define thread list
 static bg* list = NULL;
+static bool signal_on = false;
 
 // List Management Methods
 static void add_bg(bg* item) {
@@ -58,23 +61,25 @@ static bg* get_bg(char* item) {
 }
 
 // Looping Methods
-static void check_connection(member* m, uint8_t* count) {
+static void check_connection(member* m) {
 
     // Check if Disconnected
-    if (m->state & AVAIL && *count > 4) member_unset_state(m, AVAIL);
+    if (m->state & AVAIL && m->avail >= 4) {
+        printf("%s Disconnected!\n", m->id);
+        member_unset_state(m, AVAIL);
+    }
 
     // Check Reconnection
-    if (m->state & AVAIL && *count > 4) *count = 0;
+    if (!(m->state & AVAIL) && m->avail < 4) {
+        member_set_state(m, AVAIL);
+        printf("%s Reconnected!\n", m->id);
+    }
 
-    // Update Count
-    *count = (uint8_t) fmax(*count + 1, 5);
+    // Update avail
+    m->avail = (uint8_t) fmin(m->avail + 1, 4);
 
     // Send Ping
-    char message[] = "ping";
-    size_t message_size = strlen(message);
-    server_send(m->ip, m->port, message, message_size);
-
-    printf("Sent PING to %s\n", m->id);
+    send_ping(m);
 
 }
 static void check_mount(member* m) {
@@ -88,31 +93,28 @@ static void* loop(void* _bg) {
     bg* item = (bg*) _bg;
     member* m = item->owner;
 
-    uint8_t count = 0;
-
     while (!item->stop) {
 
-        check_connection(m, &count);
-        check_mount(m);
+        check_connection(m);
+        //check_mount(m);
 
         sleep(10);
 
     }
 
+    printf("Stopped %s background!\n", m->id);
     return NULL;
 
 }
 
 // Background Management Methods
-void start_background(member* m) {
+void stop_wait_all() {
 
-    bg* item = (bg *) malloc(sizeof(bg));
-    item->next = NULL;
-    item->owner = m;
-    item->stop = 0;
-
-    pthread_create(&(item->thread), NULL, loop, item);
-    add_bg(item);
+    bg* aux = list;
+    while (aux != NULL) {
+        aux->stop = 1;
+        pthread_join(aux->thread, NULL);
+    }
 
 }
 void stop_background(member* m) {
@@ -127,12 +129,16 @@ void wait_background(member* m) {
     pthread_join(item->thread, NULL);
 
 }
-void stop_wait_all() {
+void start_background(member* m) {
 
-    bg* aux = list;
-    while (aux != NULL) {
-        aux->stop = 1;
-        pthread_join(aux->thread, NULL);
-    }
+    bg* item = (bg *) malloc(sizeof(bg));
+    item->next = NULL;
+    item->owner = m;
+    item->stop = 0;
+
+    printf("Started background for %s\n", m->id);
+
+    pthread_create(&(item->thread), NULL, loop, item);
+    add_bg(item);
 
 }

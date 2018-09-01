@@ -30,8 +30,21 @@ static member* self = NULL;
 static mlist* members = NULL;
 static uint16_t child_count = 0;
 
+static member* copy_member(member* m) {
 
-// Initializes members file and information
+    member* result = (member *) malloc(sizeof(member));
+    memcpy(result, m, sizeof(member));
+
+    result->id = (char *) malloc(result->id_size);
+    result->prefix = (char *) malloc(result->prefix_size);
+
+    strncpy(result->id, m->id, result->id_size);
+    strncpy(result->prefix, m->prefix, result->prefix_size);
+
+    return result;
+
+}
+
 int initialize_metadata_members(member *m) {
 
     FILE* file;
@@ -52,13 +65,10 @@ int initialize_metadata_members(member *m) {
     free(line);
 
     self = m;
-    self->state = 0;
-    self->editable = sem_open(m->id, O_CREAT, 0200, 1);
 
     return 0;
 }
 
-// Prints a member to stdout
 void print_member(member* m) {
 
     printf("ID: %s\n", m->id);
@@ -69,14 +79,12 @@ void print_member(member* m) {
 
 }
 
-// Return the size of the contents of a member (without string terminators)
 size_t size_of_member(member* m) {
 
     return 3 * sizeof(uint16_t) + 15 + m->prefix_size + m->id_size;
 
 }
 
-// Frees a member from memory
 void free_member(member *m) {
 
     sem_unlink(m->id);
@@ -92,7 +100,6 @@ static void _free_member(mlist *m) {
 
 }
 
-// Generate a new unique ID following the pattern
 char* generate_member_id() {
 
     ++child_count;
@@ -106,7 +113,6 @@ char* generate_member_id() {
 
 }
 
-// Remove a member from the members list
 void remove_member(char* id) {
 
     mlist** aux = &members;
@@ -123,28 +129,26 @@ void remove_member(char* id) {
 
 }
 
-// Add a member to the members list
 void add_member(member* memb) {
 
     mlist* m = (mlist *) malloc(sizeof(mlist));
-    m->content = memb;
+    member* n = copy_member(memb);
+    m->content = n;
 
     mlist** head = &members;
     m->next = *head;
     *head = m;
 
-    start_background(memb);
+    start_background(n);
 
 }
 
-// Return the current member
 member* get_current_member() {
 
     return self;
 
 }
 
-// Return a member with a given id
 member* get_certain_member(char* id) {
 
     mlist* aux = members;
@@ -157,7 +161,6 @@ member* get_certain_member(char* id) {
     return NULL;
 }
 
-// Execute an operation for each member
 void members_for_each(void (*funct)(member*)) {
 
     mlist* aux = members;
@@ -182,7 +185,6 @@ void _members_for_each(void (*funct)(mlist*)) {
 
 }
 
-// Removes the metadata members file
 int remove_metadata_members() {
 
     printf("1");
@@ -199,7 +201,6 @@ int remove_metadata_members() {
 
 }
 
-// Print a member to a string (assume buffer is big enough)
 size_t serialize_member(member *param, char **buffer) {
 
     // Calculate the size of the output
@@ -233,7 +234,6 @@ size_t serialize_member(member *param, char **buffer) {
 
 }
 
-// Read a line and build a 'member' struct
 int deserialize_member(char *input, member *container) {
 
     uint16_t size = 0;
@@ -270,7 +270,6 @@ int deserialize_member(char *input, member *container) {
     return 0;
 }
 
-// Build a member struct based on the parameters (Assume ip is decently sized)
 member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
     member* result = (member *) malloc(sizeof(member));
@@ -286,6 +285,7 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
     result->prefix = (char *) malloc(result->prefix_size + sizeof(char));
     strcpy(result->prefix, prefix);
 
+    result->avail = 0;
     result->state = 0;
     result->editable = sem_open(id, O_CREAT, 0200, 1);
 
@@ -293,7 +293,6 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
 }
 
-// Build a message with all the known members
 char* build_members_message() {
 
     uint16_t count = 0;
@@ -329,7 +328,6 @@ char* build_members_message() {
 
 }
 
-// Manage Member State
 uint16_t member_get_state(member* m, uint16_t state) {
 
     return m->state & state;
@@ -338,7 +336,10 @@ uint16_t member_get_state(member* m, uint16_t state) {
 uint16_t member_set_state(member* m, uint16_t state) {
 
     sem_wait(m->editable);
+
     uint16_t result = state | m->state;
+    m->state = result;
+
     sem_post(m->editable);
 
     return result;
@@ -347,7 +348,10 @@ uint16_t member_set_state(member* m, uint16_t state) {
 uint16_t member_unset_state(member* m, uint16_t state) {
 
     sem_wait(m->editable);
+
     uint16_t result = ~state & m->state;
+    m->state = result;
+
     sem_post(m->editable);
 
     return result;

@@ -5,13 +5,14 @@
 #include <stdint.h>
 #include <semaphore.h>
 
-#define AVAIL 0x01
-#define MOUNT 0x02
-#define RECP  0x04
+#define AVAIL 0x00001
+#define MOUNT 0x00002
+#define RECP  0x00004
 
 // Define member struct
 typedef struct _member {
 
+    uint8_t avail;
     uint16_t state;
     sem_t* editable;
 

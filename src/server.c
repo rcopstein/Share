@@ -13,6 +13,8 @@
 
 #include "members.h"
 
+// #define _DEBUG_SERVER_MESSAGES
+
 // Variables
 static int stop = 0;
 static uint16_t port;
@@ -65,7 +67,6 @@ void* _server_start(void* vport) {
         if (stop) break;
 
         if (client_socket < 0) { error("Failed to accept connection\n", NULL); continue; }
-        else printf("> CONNECTION\n");
 
         size_t size = 0;
         char* buffer = NULL;
@@ -79,8 +80,10 @@ void* _server_start(void* vport) {
             continue;
         }
 
+#ifdef _DEBUG_SERVER_MESSAGES
         printf("Received message: '%s'\n", buffer);
         printf("Size is: '%zu'\n\n", size);
+#endif
 
         for (int i = 0; i < size; ++i) {
             if (isprint(buffer[i])) printf("%c", buffer[i]);
@@ -92,7 +95,7 @@ void* _server_start(void* vport) {
         free(buffer);
 
         nops_close_connection(client_socket);
-        printf("> CLOSED\n");
+        printf("===\n");
     }
 
     return NULL;
