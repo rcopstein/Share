@@ -9,6 +9,7 @@
 #include "members.h"
 
 static const char exportsFile[] = "/etc/exports";
+static const char unmountCmd[] = "sudo umount %s:%s";
 static const char mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
 
 // Build NFS Path for member
@@ -110,6 +111,23 @@ int mount_nfs_dir(member* m) {
 
     char* command = (char *) malloc(size + strlen(mountCmd) + m->id_size);
     sprintf(command, mountCmd, m->ip, path, m->id);
+    printf("> %s\n", command);
+
+    int result = system(command);
+
+    free(command);
+    free(path);
+
+    return result;
+
+}
+int unmount_nfs_dir(member* m) {
+
+    size_t size;
+    char* path = build_nfs_path(m, &size);
+
+    char* command = (char *) malloc(size + strlen(unmountCmd) + 15);
+    sprintf(command, unmountCmd, m->ip, path);
     printf("> %s\n", command);
 
     int result = system(command);

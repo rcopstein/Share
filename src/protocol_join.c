@@ -139,6 +139,7 @@ static void clean_handle_join_rep(int depth, char *path, char *recp, char *id, c
         case 5:
             if (remove_nfs_recp(path, recp)) error("Failed to remove recipient!\n", NULL);
         case 4:
+            //if (unmount_nfs_dir(m)) error("Failed to unmount NFS dir!\n", NULL);
             // Unmount NFS dir
         case 3:
             fops_remove_dir(id2);

@@ -14,27 +14,28 @@ static const uint8_t TYPE_REP = 1;
 static const char protocol[] = "mont";
 static const uint8_t protocol_size = 4;
 
-int send_mont_req(char *ip, uint16_t port, member *m) {
-
-    // Get current member state
-    uint16_t state = member_get_state(m, RECP);
+int send_mont_req(member *m) {
 
     // Check if member is a recipient
-    if (!state) {
+    if (!(m->state & RECP)) {
 
         // Add NFS recipient
         if (add_nfs_recp(get_current_member(), m->ip)) {
-            return warning("Failed to add ", NULL);
+            return warning("Failed to add %s as recipient\n", m->id);
         }
 
         member_set_state(m, RECP);
 
     }
 
+    // Get Current Member
+    member* current = get_current_member();
+
     // Calculate size for message
-    size_t size = protocol_size;
-    size += size_of_member(m);
+    size_t size = current->id_size;
+    size += sizeof(uint16_t);
     size += sizeof(uint8_t);
+    size += protocol_size;
 
     // Allocate size for message
     char* message = (char *) malloc(size);
@@ -46,17 +47,25 @@ int send_mont_req(char *ip, uint16_t port, member *m) {
     memcpy(aux, &TYPE_REQ, sizeof(uint8_t)); // Copy Protocol Type
     aux += sizeof(uint8_t);
 
-    serialize_member(m, &aux); // Serialize member
+    memcpy(aux, &(current->id_size), sizeof(uint16_t)); // Copy ID Size
+    aux += sizeof(uint16_t);
 
-    return server_send(ip, port, message, size);
+    memcpy(aux, current->id, current->id_size); // Copy ID
+    // aux += get_current_member()->id_size;
+
+    return server_send(m->ip, m->port, message, size);
 
 }
-int send_mont_rep(char *ip, uint16_t port, member *m) {
+int send_mont_rep(member *m) {
+
+    //  Get Current Member
+    member* current = get_current_member();
 
     // Calculate size for message
-    size_t size = protocol_size;
-    size += size_of_member(m);
+    size_t size = current->id_size;
+    size += sizeof(uint16_t);
     size += sizeof(uint8_t);
+    size += protocol_size;
 
     // Allocate size for message
     char* message = (char *) malloc(size);
@@ -68,92 +77,111 @@ int send_mont_rep(char *ip, uint16_t port, member *m) {
     memcpy(aux, &TYPE_REP, sizeof(uint8_t)); // Copy Protocol Type
     aux += sizeof(uint8_t);
 
-    serialize_member(m, &aux); // Serialize member
+    memcpy(aux, &(current->id_size), sizeof(uint16_t)); // Copy ID Size
+    aux += sizeof(uint16_t);
 
-    return server_send(ip, port, message, size);
+    memcpy(aux, current->id, current->id_size); // Copy ID
+    // aux += get_current_member()->id_size;
+
+    return server_send(m->ip, m->port, message, size);
 
 }
 
 void handle_mont_req(char *message) {
 
-    // Read member
-    member m;
-    if (deserialize_member(message, &m)) {
-        warning("Failed to read member from mount req message!\n", NULL);
+    // Read ID Size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Allocate and read ID
+    char* id = (char *) malloc(size + 1);
+    memcpy(id, message, size);
+    id[size] = '\0';
+
+    // Find member
+    member* m = get_certain_member(id);
+    free(id);
+
+    if (m == NULL) {
+        warning("Failed to find member from mount req message with ID '%s'!\n", id);
         return;
     }
 
-    // Get current member state
-    uint16_t state = member_get_state(&m, MOUNT);
-
     // Check if member has been mounted
-    if (!state) {
+    if (!(m->state & MOUNT)) {
 
         // Attempt to create folder
-        if (fops_make_dir(m.id)) {
-            warning("Failed to create folder for %s\n", m.id);
+        if (fops_make_dir(m->id)) {
+            warning("Failed to create folder for %s\n", m->id);
             return;
         }
 
         // Attempt to mount NFS
-        if (mount_nfs_dir(&m)) {
-            warning("Failed to mount NFS for %s\n", m.id);
-            fops_remove_dir(m.id);
+        if (mount_nfs_dir(m)) {
+            warning("Failed to mount NFS for %s\n", m->id);
+            fops_remove_dir(m->id);
             return;
         }
 
-        member_set_state(&m, MOUNT);
+        member_set_state(m, MOUNT);
 
     }
 
-    // Get current member state
-    state = member_get_state(&m, RECP);
-
     // Check if member is a recipient
-    if (!state) {
+    if (!(m->state & RECP)) {
 
         // Add NFS recipient
-        if (add_nfs_recp(get_current_member(), m.ip)) {
+        if (add_nfs_recp(get_current_member(), m->ip)) {
             warning("Failed to add ", NULL);
             return;
         }
 
-        member_set_state(&m, RECP);
+        member_set_state(m, RECP);
 
     }
 
-    send_mont_rep(m.ip, m.port, get_current_member());
+    send_mont_rep(get_current_member());
 
 }
 void handle_mont_rep(char *message) {
 
-    // Read member
-    member m;
-    if (deserialize_member(message, &m)) {
-        warning("Failed to read member from mount req message!\n", NULL);
+    // Read ID Size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Allocate and read ID
+    char* id = (char *) malloc(size + 1);
+    memcpy(id, message, size);
+    id[size] = '\0';
+
+    // Find member
+    member* m = get_certain_member(id);
+    free(id);
+
+    if (m == NULL) {
+        warning("Failed to find member from mount req message with ID '%s'!\n", id);
         return;
     }
 
-    // Get current member state
-    uint16_t state = member_get_state(&m, MOUNT);
-
     // Check if member has been mounted
-    if (!state) {
+    if (!(m->state & MOUNT)) {
 
         // Attempt to create folder
-        if (fops_make_dir(m.id)) {
-            warning("Failed to create folder for %s\n", m.id);
+        if (fops_make_dir(m->id)) {
+            warning("Failed to create folder for %s\n", m->id);
             return;
         }
 
         // Attempt to mount NFS
-        if (mount_nfs_dir(&m)) {
-            warning("Failed to mount NFS for %s\n", m.id);
-            fops_remove_dir(m.id);
+        if (mount_nfs_dir(m)) {
+            warning("Failed to mount NFS for %s\n", m->id);
+            fops_remove_dir(m->id);
             return;
         }
 
-        member_set_state(&m, MOUNT);
+        member_set_state(m, MOUNT);
 
     }
 

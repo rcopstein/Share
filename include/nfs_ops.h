@@ -8,11 +8,10 @@ int update_nfs();
 // Remove a NFS directory
 int remove_nfs_dir(char* path);
 
-// Add NFS recipient
+// Add/Remove NFS recipient
 int add_nfs_recp(member* m, char* recipient);
-
-// Remove NFS recipient
 int remove_nfs_recp(char* path, char* recipient);
 
-// Mount an NFS view
+// Mount/Unmount an NFS view
 int mount_nfs_dir(member* m);
+int unmount_nfs_dir(member* m);

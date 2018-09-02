@@ -8,7 +8,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <protocol_name.h>
 
 #include "fops.h"
 #include "nops.h"
@@ -19,6 +18,8 @@
 #include "nfs_ops.h"
 #include "server.h"
 #include "protocol_join.h"
+#include "protocol_name.h"
+#include "background.h"
 
 const char METADATA_DIR[] = "metadata/";
 const char METADATA_HIERARCHY[] = "metadata/logical_hierarchy.txt";
@@ -40,6 +41,14 @@ int usage() {
     printf("\tRemove a machine from the network\n");
 
     return 1;
+}
+
+// Handle SIGINT
+static void on_interrupt(int signal) {
+
+    server_stop();
+    stop_wait_all_background();
+
 }
 
 // Initialize
@@ -278,6 +287,9 @@ int main(int argc, char** argv) {
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();
+
+    // Register Interruption Handler
+    signal(SIGINT, on_interrupt);
 
     // Read command
     char* command = argv[1];

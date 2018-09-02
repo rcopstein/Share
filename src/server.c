@@ -35,15 +35,9 @@ void server_stop() {
     nops_close_connection(server_socket);
     server_wait();
 
-    remove_metadata_members();
     printf("Finished!\n");
     fflush(0);
 
-}
-
-// Server Cleanup
-static void server_cleanup(int signal) {
-    server_stop();
 }
 
 // Starts Server at Port
@@ -103,13 +97,15 @@ void* _server_start(void* vport) {
 int server_start(uint16_t _port) {
 
     port = _port;
-    if (signal(SIGINT, &server_cleanup) == SIG_ERR) return 1;
     return pthread_create(&server_thread, NULL, _server_start, &port);
 
 }
 
 // Send a message using the server
 int server_send(char* ip, uint16_t port, void* message, size_t size) {
+
+    // Check for stop
+    if (stop) return 1;
 
     // Open the connection socket
     int sock = nops_open_connection(ip, port);

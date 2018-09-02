@@ -6,4 +6,4 @@
 void start_background(member* m);
 void stop_background(member* m);
 void wait_background(member* m);
-void stop_wait_all();
+void stop_wait_all_background();

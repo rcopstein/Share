@@ -187,16 +187,10 @@ void _members_for_each(void (*funct)(mlist*)) {
 
 int remove_metadata_members() {
 
-    printf("1");
     _members_for_each(_free_member);
-
-    printf("2");
     free_member(self);
-
-    printf("3");
     members = NULL;
 
-    printf("4");
     return remove(filepath);
 
 }

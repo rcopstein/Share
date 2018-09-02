@@ -23,7 +23,6 @@ typedef struct _bg {
 
 // Define thread list
 static bg* list = NULL;
-static bool signal_on = false;
 
 // List Management Methods
 static void add_bg(bg* item) {
@@ -84,8 +83,9 @@ static void check_connection(member* m) {
 }
 static void check_mount(member* m) {
 
-    if (!(m->state & MOUNT) || !(m->state & RECP)) send_mont_req(m->ip, m->port, m);
+    if (!(m->state & AVAIL)) return;
     printf("Checked MOUNT for %s\n", m->id);
+    if (!(m->state & MOUNT) || !(m->state & RECP)) send_mont_req(m);
 
 }
 static void* loop(void* _bg) {
@@ -96,7 +96,7 @@ static void* loop(void* _bg) {
     while (!item->stop) {
 
         check_connection(m);
-        //check_mount(m);
+        check_mount(m);
 
         sleep(10);
 
@@ -108,12 +108,15 @@ static void* loop(void* _bg) {
 }
 
 // Background Management Methods
-void stop_wait_all() {
+void stop_wait_all_background() {
 
     bg* aux = list;
     while (aux != NULL) {
         aux->stop = 1;
+        printf("Waiting for %s background\n", aux->owner->id);
+
         pthread_join(aux->thread, NULL);
+        aux = aux->next;
     }
 
 }
