@@ -55,6 +55,8 @@ void* _server_start(void* vport) {
         return NULL;
     }
 
+    printf("===\n");
+
     for (;;) {
 
         client_socket = accept(server_socket, (struct sockaddr*)&client, &socket_size);
@@ -75,15 +77,14 @@ void* _server_start(void* vport) {
         }
 
 #ifdef _DEBUG_SERVER_MESSAGES
-        printf("Received message: '%s'\n", buffer);
-        printf("Size is: '%zu'\n\n", size);
-#endif
-
+        printf("\nSize is: '%zu'\n", size);
+        printf("# ");
         for (int i = 0; i < size; ++i) {
             if (isprint(buffer[i])) printf("%c", buffer[i]);
             else printf("'%u'", buffer[i]);
         }
-        printf("\n");
+        printf("\n\n");
+#endif
 
         protocol_handle(buffer, size);
         free(buffer);
@@ -117,6 +118,17 @@ int server_send(char* ip, uint16_t port, void* message, size_t size) {
         nops_close_connection(sock);
         return 1;
     }
+
+#ifdef _DEBUG_SERVER_MESSAGES
+    char* buffer = (char *) message;
+    printf("\nSent: ");
+    printf("# ");
+    for (int i = 0; i < size; ++i) {
+        if (isprint(buffer[i])) printf("%c", buffer[i]);
+        else printf("'%u'", buffer[i]);
+    }
+    printf("\n\n");
+#endif
 
     nops_close_connection(sock);
     return 0;

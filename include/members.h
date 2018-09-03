@@ -12,18 +12,31 @@
 // Define member struct
 typedef struct _member {
 
+    // Clocks
+    uint16_t member_clock;
+
+    // State Management
     uint8_t avail;
     uint16_t state;
     sem_t* editable;
 
+    // Identification
     char* id;
-    char ip[16];
-    char* prefix;
-    uint16_t port;
     uint16_t id_size;
+
+    // Addressing
+    char ip[16];
+    uint16_t port;
+
+    // NFS
+    char* prefix;
     uint16_t prefix_size;
 
 } member;
+
+// Version Clock
+uint16_t get_member_clock();
+uint16_t inc_member_clock();
 
 // Define methods
 int initialize_metadata_members(member *m);

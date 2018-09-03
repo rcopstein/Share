@@ -16,6 +16,7 @@ int send_ping(member* m) {
     // Calculate Message Size
     size_t size = current->id_size;
     size += sizeof(uint16_t);
+    size += sizeof(uint16_t);
     size += protocol_size;
 
     // Allocate Message
@@ -29,7 +30,11 @@ int send_ping(member* m) {
     aux += sizeof(uint16_t);
 
     memcpy(aux, current->id, current->id_size); // Copy ID
-    //aux += current->id_size;
+    aux += current->id_size;
+
+    uint16_t member_clock = get_member_clock(); // Copy Member Clock
+    memcpy(aux, &member_clock, sizeof(uint16_t));
+    // aux += sizeof(uint16_t);
 
     // Send Message
     return server_send(m->ip, m->port, message, size);
@@ -47,19 +52,30 @@ void handle_ping_protocol(char* message) {
     char* id = (char *) malloc(size + 1);
     memcpy(id, message, size);
     id[size] = '\0';
+    message += size;
 
     printf("Read size %d and ID %s\n", size, id);
 
     // Find Member with ID
     member* m = get_certain_member(id);
+    free(id);
+
     if (m == NULL) {
         warning("Failed to find member with ID %s\n", id);
-        free(id);
         return;
     }
 
     // Update Member State
     m->avail = 0;
-    free(id);
+
+    // Read Member Clock
+    uint16_t member_clock;
+    memcpy(&member_clock, message, sizeof(uint16_t));
+    printf("> Clock for '%s' is %d. Current registry is %d\n", m->id, member_clock, m->member_clock);
+
+    if (member_clock > m->member_clock) {
+        printf("CLOCK FOR '%s' HAS CHANGED!\n", m->id);
+        m->member_clock = member_clock;
+    }
 
 }

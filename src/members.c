@@ -30,6 +30,28 @@ static member* self = NULL;
 static mlist* members = NULL;
 static uint16_t child_count = 0;
 
+// Version Clock
+static uint16_t member_clock = 0;
+static sem_t* member_clock_sem = NULL;
+
+uint16_t get_member_clock() {
+
+    return member_clock;
+
+}
+uint16_t inc_member_clock() {
+
+    if (member_clock_sem == NULL) member_clock_sem = sem_open("", O_CREAT, 1);
+
+    sem_wait(member_clock_sem);
+    ++member_clock;
+    sem_post(member_clock_sem);
+
+    return member_clock;
+
+}
+
+// Methods
 static member* copy_member(member* m) {
 
     member* result = (member *) malloc(sizeof(member));
@@ -121,6 +143,7 @@ void remove_member(char* id) {
         if (strcmp((*aux)->content->id, id) == 0) {
             mlist* m = *aux;
             *aux = (*aux)->next;
+            inc_member_clock();
             _free_member(m);
             return;
         }
@@ -140,6 +163,7 @@ void add_member(member* memb) {
     *head = m;
 
     start_background(n);
+    inc_member_clock();
 
 }
 
@@ -261,6 +285,8 @@ int deserialize_member(char *input, member *container) {
     container->state = 0;
     container->editable = sem_open(container->id, O_CREAT, 0200, 1);
 
+    container->member_clock = 0;
+
     return 0;
 }
 
@@ -282,6 +308,8 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
     result->avail = 0;
     result->state = 0;
     result->editable = sem_open(id, O_CREAT, 0200, 1);
+
+    result->member_clock = 0;
 
     return result;
 

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 #include "output.h"
 
@@ -46,8 +47,14 @@ int fops_append_line(const char* filename, const char* line) {
     FILE* file = fopen(filename, "a");
     if (file == NULL) return error("File '%s' not found!\n", (char *) filename);
 
+    int lock = flock(fileno(file), LOCK_EX);
+    if (lock) { fclose(file); return error("Failed to lock file!\n", NULL); }
+
     fwrite(line, sizeof(char), strlen(line), file);
     fclose(file);
+
+    flock(fileno(file), LOCK_UN);
+
     return 0;
 }
 
@@ -69,12 +76,18 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
     FILE* file = fopen(filename, "r");
     if (file == NULL) return error("Failed to open file '%s'!\n", (char *) filename);
 
+    int lock = flock(fileno(file), LOCK_EX);
+    if (lock) { fclose(file); return error("Failed to lock file!\n", NULL); }
+
     char* tempPath = "temp";
     FILE* tempFile = fopen(tempPath, "w+");
     if (tempFile == NULL) {
         fclose(file);
         return error("Failed to create a temporary file!\n", NULL);
     }
+
+    lock = flock(fileno(tempFile), LOCK_EX);
+    if (lock) { fclose(tempFile); fclose(file); return error("Failed to lock temp file!\n", NULL); }
 
     bool flag;
     char* line;
@@ -118,6 +131,9 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
     fclose(tempFile);
     fclose(file);
     free(buffer);
+
+    flock(fileno(tempFile), LOCK_UN);
+    flock(fileno(file), LOCK_UN);
 
     return result;
 

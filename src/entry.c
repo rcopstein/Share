@@ -110,11 +110,13 @@ int create(char* ip, uint16_t port) {
 
     // Create the NFS directory
     if (fops_make_dir(nfs)) return clean_create();
-    printf("Created the NFS directory\n");
 
     // Retake super user privileges
     setegid(0);
     seteuid(0);
+
+    // REMOVE THIS LATER
+    //add_nfs_recp(get_current_member(), "111.111.111.111");
 
     server_wait();
     return 0;
@@ -142,10 +144,6 @@ int parse_create(int argc, char** argv) {
 
     // Check required arguments
     if (ip[0] == 0) return usage();
-
-    // Print parameters
-    printf("IP: %s\n", ip);
-    printf("Port: %d\n", port);
 
     // Call Create
     return create(ip, port);
@@ -195,7 +193,6 @@ int parse_join(int argc, char** argv) {
     // Read server address
     char* tok = strtok(argv[0], ":");
     strncpy(server, tok, 15);
-    printf("IP: %s\n", tok);
 
     tok = strtok(NULL, ":");
     if (tok != NULL) server_port = (uint16_t) strtol(tok, NULL, 10);
@@ -203,15 +200,12 @@ int parse_join(int argc, char** argv) {
     // Read client address
     tok = strtok(argv[1], ":");
     strncpy(client, tok, 15);
-    printf("IP: %s\n", tok);
 
     tok = strtok(NULL, ":");
     if (tok != NULL) client_port = (uint16_t) strtol(tok, NULL, 10);
 
     // Check required arguments
     if (server[0] == '\0' || client[0] == '\0') return error("Failed to parse ips\n", NULL);
-
-    printf("Server: %s:%d\nClient: %s:%d\n", server, server_port, client, client_port);
     return join(server, server_port, client, client_port);
 }
 

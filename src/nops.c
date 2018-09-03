@@ -72,7 +72,6 @@ int nops_open_connection(char* ip, uint16_t port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = inet_addr(ip);
 
-    printf("Waiting for %s:%d to accept!\n", ip, port);
     if (connect(sock, (struct sockaddr *)&addr, sizeof(addr))) {
         printf("Failed to connect to socket! Error: %d\n", errno);
         return -1;
@@ -113,6 +112,5 @@ int nops_listen_at(uint16_t port) {
         return -1;
     }
 
-    printf("Waiting for incoming connections!\n");
     return conn;
 }

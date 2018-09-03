@@ -84,8 +84,7 @@ static void check_connection(member* m) {
 static void check_mount(member* m) {
 
     if (!(m->state & AVAIL)) return;
-    printf("Checked MOUNT for %s\n", m->id);
-    if (!(m->state & MOUNT) || !(m->state & RECP)) send_mont_req(m);
+    if (!(m->state & MOUNT)) send_mont_req(m);
 
 }
 static void* loop(void* _bg) {
@@ -97,7 +96,6 @@ static void* loop(void* _bg) {
 
         check_connection(m);
         check_mount(m);
-
         sleep(10);
 
     }

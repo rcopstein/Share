@@ -14,19 +14,7 @@ static const uint8_t TYPE_REP = 1;
 static const char protocol[] = "mont";
 static const uint8_t protocol_size = 4;
 
-int send_mont_req(member *m) {
-
-    // Check if member is a recipient
-    if (!(m->state & RECP)) {
-
-        // Add NFS recipient
-        if (add_nfs_recp(get_current_member(), m->ip)) {
-            return warning("Failed to add %s as recipient\n", m->id);
-        }
-
-        member_set_state(m, RECP);
-
-    }
+static int send_mont(member* m, uint8_t type) {
 
     // Get Current Member
     member* current = get_current_member();
@@ -44,7 +32,7 @@ int send_mont_req(member *m) {
     memcpy(aux, protocol, protocol_size); // Copy Protocol
     aux += protocol_size;
 
-    memcpy(aux, &TYPE_REQ, sizeof(uint8_t)); // Copy Protocol Type
+    memcpy(aux, &type, sizeof(uint8_t)); // Copy Protocol Type
     aux += sizeof(uint8_t);
 
     memcpy(aux, &(current->id_size), sizeof(uint16_t)); // Copy ID Size
@@ -56,76 +44,50 @@ int send_mont_req(member *m) {
     return server_send(m->ip, m->port, message, size);
 
 }
+
+int send_mont_req(member *m) {
+
+    return send_mont(m, TYPE_REQ);
+
+}
 int send_mont_rep(member *m) {
 
-    //  Get Current Member
-    member* current = get_current_member();
+    return send_mont(m, TYPE_REP);
 
-    // Calculate size for message
-    size_t size = current->id_size;
-    size += sizeof(uint16_t);
-    size += sizeof(uint8_t);
-    size += protocol_size;
+}
 
-    // Allocate size for message
-    char* message = (char *) malloc(size);
-    char* aux = message;
+static int read_memb(char** message, member** m) {
 
-    memcpy(aux, protocol, protocol_size); // Copy Protocol
-    aux += protocol_size;
+    // Read ID Size
+    uint16_t size;
+    memcpy(&size, *message, sizeof(uint16_t));
+    *message += sizeof(uint16_t);
 
-    memcpy(aux, &TYPE_REP, sizeof(uint8_t)); // Copy Protocol Type
-    aux += sizeof(uint8_t);
+    // Allocate and read ID
+    char* id = (char *) malloc(size + 1);
+    memcpy(id, *message, size);
+    id[size] = '\0';
 
-    memcpy(aux, &(current->id_size), sizeof(uint16_t)); // Copy ID Size
-    aux += sizeof(uint16_t);
+    printf("Read ID '%s'\n", id);
 
-    memcpy(aux, current->id, current->id_size); // Copy ID
-    // aux += get_current_member()->id_size;
+    // Find member
+    *m = get_certain_member(id);
+    free(id);
 
-    return server_send(m->ip, m->port, message, size);
+    // Return result
+    if (*m == NULL) return 1;
+    return 0;
 
 }
 
 void handle_mont_req(char *message) {
 
-    // Read ID Size
-    uint16_t size;
-    memcpy(&size, message, sizeof(uint16_t));
-    message += sizeof(uint16_t);
-
-    // Allocate and read ID
-    char* id = (char *) malloc(size + 1);
-    memcpy(id, message, size);
-    id[size] = '\0';
-
-    // Find member
-    member* m = get_certain_member(id);
-    free(id);
+    member* m;
+    read_memb(&message, &m);
 
     if (m == NULL) {
-        warning("Failed to find member from mount req message with ID '%s'!\n", id);
+        warning("Failed to read member!\n", NULL);
         return;
-    }
-
-    // Check if member has been mounted
-    if (!(m->state & MOUNT)) {
-
-        // Attempt to create folder
-        if (fops_make_dir(m->id)) {
-            warning("Failed to create folder for %s\n", m->id);
-            return;
-        }
-
-        // Attempt to mount NFS
-        if (mount_nfs_dir(m)) {
-            warning("Failed to mount NFS for %s\n", m->id);
-            fops_remove_dir(m->id);
-            return;
-        }
-
-        member_set_state(m, MOUNT);
-
     }
 
     // Check if member is a recipient
@@ -133,7 +95,7 @@ void handle_mont_req(char *message) {
 
         // Add NFS recipient
         if (add_nfs_recp(get_current_member(), m->ip)) {
-            warning("Failed to add ", NULL);
+            warning("Failed to add NFS recipient '%s'\n", m->ip);
             return;
         }
 
@@ -141,27 +103,16 @@ void handle_mont_req(char *message) {
 
     }
 
-    send_mont_rep(get_current_member());
+    send_mont_rep(m);
 
 }
 void handle_mont_rep(char *message) {
 
-    // Read ID Size
-    uint16_t size;
-    memcpy(&size, message, sizeof(uint16_t));
-    message += sizeof(uint16_t);
-
-    // Allocate and read ID
-    char* id = (char *) malloc(size + 1);
-    memcpy(id, message, size);
-    id[size] = '\0';
-
-    // Find member
-    member* m = get_certain_member(id);
-    free(id);
+    member* m;
+    read_memb(&message, &m);
 
     if (m == NULL) {
-        warning("Failed to find member from mount req message with ID '%s'!\n", id);
+        warning("Failed to read member!\n", NULL);
         return;
     }
 
