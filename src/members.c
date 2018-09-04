@@ -315,10 +315,10 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
 }
 
-char* build_members_message() {
+char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
 
     uint16_t count = 0;
-    size_t size = sizeof(uint16_t);
+    *size = sizeof(uint16_t);
 
     mlist* m = members;
     while (m != NULL) {
@@ -327,13 +327,16 @@ char* build_members_message() {
         m = m->next;
     }
 
-    char* message = (char *) malloc(size);
+    char* message = (char *) malloc(prefix_size + *size);
     char* aux = message;
 
     if (message == NULL) {
         error("Failed to allocate memory!\n", NULL);
         return NULL;
     }
+
+    memcpy(aux, prefix, prefix_size); // Copy Prefix
+    aux += prefix_size;
 
     memcpy(aux, &count, sizeof(uint16_t)); // Copy the number of members
     aux += sizeof(uint16_t);

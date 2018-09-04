@@ -60,7 +60,7 @@ int deserialize_member(char *input, member *container);
 member* build_member(char* id, char* ip, uint16_t port, char* prefix);
 void free_member(member* m);
 
-char* build_members_message();
+char* build_members_message(size_t prefix_size, char* prefix, size_t* size);
 
 uint16_t member_get_state(member* m, uint16_t state);
 uint16_t member_set_state(member* m, uint16_t state);
