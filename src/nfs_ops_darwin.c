@@ -7,6 +7,7 @@
 #include "output.h"
 #include "nfs_ops.h"
 #include "members.h"
+#include "shared_memory.h"
 
 static const char exportsFile[] = "/etc/exports";
 static const char unmountCmd[] = "sudo umount %s:%s";
@@ -56,9 +57,13 @@ int add_nfs_recp(member* m, char* recipient) {
     _path = build_nfs_path(m, &size);
     _ip = recipient;
 
-    if (fops_update_line(exportsFile, _path, _add_nfs_recp))
+    if (lock_exports_file()) return error("Failed to lock exports file!\n", NULL);
+    if (fops_update_line(exportsFile, _path, _add_nfs_recp)) {
+        unlock_exports_file();
         return error("Failed to update line!\n", NULL);
+    }
 
+    unlock_exports_file();
     return update_nfs();
 }
 
@@ -97,9 +102,13 @@ int remove_nfs_recp(char* path, char* recipient) {
 
     _recp = recipient;
 
-    if (fops_update_line(exportsFile, path, _remove_nfs_recp))
+    if (lock_exports_file()) return error("Failed to lock exports file!\n", NULL);
+    if (fops_update_line(exportsFile, path, _remove_nfs_recp)) {
+        unlock_exports_file();
         return error("Failed to update line!\n", NULL);
+    }
 
+    unlock_exports_file();
     return update_nfs();
 }
 

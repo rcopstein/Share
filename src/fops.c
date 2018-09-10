@@ -73,21 +73,12 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
 
 int fops_update_line(const char* filename, const char* prefix, char* (*funct)(char *)) {
 
-    FILE* file = fopen(filename, "r");
+    FILE* file = fopen(filename, "r+");
     if (file == NULL) return error("Failed to open file '%s'!\n", (char *) filename);
-
-    int lock = flock(fileno(file), LOCK_EX);
-    if (lock) { fclose(file); return error("Failed to lock file!\n", NULL); }
 
     char* tempPath = "temp";
     FILE* tempFile = fopen(tempPath, "w+");
-    if (tempFile == NULL) {
-        fclose(file);
-        return error("Failed to create a temporary file!\n", NULL);
-    }
-
-    lock = flock(fileno(tempFile), LOCK_EX);
-    if (lock) { fclose(tempFile); fclose(file); return error("Failed to lock temp file!\n", NULL); }
+    if (tempFile == NULL) { fclose(file); return error("Failed to create a temporary file!\n", NULL); }
 
     bool flag;
     char* line;
@@ -99,8 +90,10 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
         flag = false;
         line = buffer;
+        printf("Read '%s' from file!\n", line);
 
         if (matches(prefix, buffer)) {
+            printf("'%s' matches buffer!\n", line);
             line = funct == NULL ? NULL : funct(buffer);
             found = true;
             flag = true;
@@ -108,6 +101,7 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
         if (line != NULL) {
             fwrite(line, sizeof(char), strlen(line), tempFile);
+            printf("'%s' was written!\n", line);
             if (flag) free(line);
         }
     }
@@ -117,6 +111,7 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
         if (line != NULL) {
             fwrite(line, sizeof(char), strlen(line), tempFile);
+            printf("'%s' was written!\n", line);
             free(line);
         }
     }
@@ -128,12 +123,14 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
         remove(tempPath);
     }
 
+    fflush(tempFile);
+    fflush(file);
+
     fclose(tempFile);
     fclose(file);
     free(buffer);
 
-    flock(fileno(tempFile), LOCK_UN);
-    flock(fileno(file), LOCK_UN);
+    sleep(10);
 
     return result;
 

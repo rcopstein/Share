@@ -27,7 +27,7 @@ void protocol_handle(char* content, size_t size) {
     else if (strncmp("mont", protocol, PROTOCOL_SIZE) == 0) handle_mont_protocol(content);
     else if (strncmp("ping", protocol, PROTOCOL_SIZE) == 0) handle_ping_protocol(content);
 
-    else if (strncmp("jrep", protocol, PROTOCOL_SIZE) == 0) handle_join_rep(content);
-    else if (strncmp("jack", protocol, PROTOCOL_SIZE) == 0) handle_join_ack(content);
+    // else if (strncmp("jrep", protocol, PROTOCOL_SIZE) == 0) handle_join_rep(content);
+    // else if (strncmp("jack", protocol, PROTOCOL_SIZE) == 0) handle_join_ack(content);
     else warning("Received unknown protocol '%s'\n", protocol);
 }
