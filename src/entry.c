@@ -74,6 +74,7 @@ int initialize(char* id, char* ip, uint16_t port) {
 
     if (server_start(port)) {
         free(pwd);
+        free_member(m);
         remove_metadata_members();
         fops_remove_dir(METADATA_DIR);
         return error("Failed to start the server!\n", NULL);

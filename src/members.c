@@ -326,6 +326,7 @@ char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
         ++count; // Count the number of members
         m = m->next;
     }
+    *size += sizeof(uint16_t);
 
     char* message = (char *) malloc(prefix_size + *size);
     char* aux = message;
@@ -337,6 +338,9 @@ char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
 
     memcpy(aux, prefix, prefix_size); // Copy Prefix
     aux += prefix_size;
+
+    memcpy(aux, &member_clock, sizeof(uint16_t)); // Copy the member clock
+    aux += sizeof(uint16_t);
 
     memcpy(aux, &count, sizeof(uint16_t)); // Copy the number of members
     aux += sizeof(uint16_t);

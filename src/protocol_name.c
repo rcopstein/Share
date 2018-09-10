@@ -36,6 +36,7 @@ int send_name_req(char *ip, uint16_t port, member *m) {
 
     serialize_member(m, &aux); // Copy member
 
+    printf("What's my name?\n");
     return server_send(ip, port, message, size);
 
 }

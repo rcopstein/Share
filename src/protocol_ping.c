@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "protocol_ping.h"
+#include "protocol_sync.h"
 #include "output.h"
 #include "server.h"
 
@@ -37,6 +38,7 @@ int send_ping(member* m) {
     // aux += sizeof(uint16_t);
 
     // Send Message
+    printf("Ping to '%s'\n", m->id);
     return server_send(m->ip, m->port, message, size);
 
 }
@@ -54,8 +56,6 @@ void handle_ping_protocol(char* message) {
     id[size] = '\0';
     message += size;
 
-    printf("Read size %d and ID %s\n", size, id);
-
     // Find Member with ID
     member* m = get_certain_member(id);
     free(id);
@@ -71,11 +71,12 @@ void handle_ping_protocol(char* message) {
     // Read Member Clock
     uint16_t member_clock;
     memcpy(&member_clock, message, sizeof(uint16_t));
-    printf("> Clock for '%s' is %d. Current registry is %d\n", m->id, member_clock, m->member_clock);
+    printf("PING from '%s'\n", id);
+    // printf("> Clock for '%s' is %d. Current registry is %d\n", m->id, member_clock, m->member_clock);
 
     if (member_clock > m->member_clock) {
-        printf("CLOCK FOR '%s' HAS CHANGED!\n", m->id);
-        m->member_clock = member_clock;
+        printf("%s's clock was %d but received %d\n!\n", m->id, m->member_clock, member_clock);
+        send_sync_req(m->ip, m->port, SYNC_MEMB);
     }
 
 }

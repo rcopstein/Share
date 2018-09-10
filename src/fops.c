@@ -130,8 +130,6 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
     fclose(file);
     free(buffer);
 
-    sleep(10);
-
     return result;
 
 }
