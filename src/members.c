@@ -323,8 +323,8 @@ char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
     mlist* m = members;
     while (m != NULL) {
         *size += size_of_member(m->content); // Count the size of the message
-        ++count; // Count the number of members
         m = m->next;
+        ++count; // Count the number of members
     }
     *size += sizeof(uint16_t);
 
