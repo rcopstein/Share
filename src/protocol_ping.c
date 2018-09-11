@@ -38,7 +38,7 @@ int send_ping(member* m) {
     // aux += sizeof(uint16_t);
 
     // Send Message
-    printf("Ping to '%s'\n", m->id);
+    printf("# Sent PING to %s\n", m->id);
     return server_send(m->ip, m->port, message, size);
 
 }
@@ -65,18 +65,18 @@ void handle_ping_protocol(char* message) {
         return;
     }
 
+    printf("# Received PING from %s\n", id);
+
     // Update Member State
     m->avail = 0;
 
     // Read Member Clock
     uint16_t member_clock;
     memcpy(&member_clock, message, sizeof(uint16_t));
-    printf("PING from '%s'\n", id);
-    // printf("> Clock for '%s' is %d. Current registry is %d\n", m->id, member_clock, m->member_clock);
 
     if (member_clock > m->member_clock) {
         printf("%s's clock was %d but received %d\n!\n", m->id, m->member_clock, member_clock);
-        send_sync_req(m->ip, m->port, SYNC_MEMB);
+        send_sync_req(m, SYNC_MEMB);
     }
 
 }

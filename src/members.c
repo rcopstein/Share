@@ -318,7 +318,9 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
 
     uint16_t count = 0;
-    *size = sizeof(uint16_t);
+    *size = prefix_size;
+    *size += sizeof(uint16_t);
+    *size += sizeof(uint16_t);
 
     mlist* m = members;
     while (m != NULL) {
@@ -326,7 +328,6 @@ char* build_members_message(size_t prefix_size, char* prefix, size_t* size) {
         m = m->next;
         ++count; // Count the number of members
     }
-    *size += sizeof(uint16_t);
 
     char* message = (char *) malloc(prefix_size + *size);
     char* aux = message;

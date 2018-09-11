@@ -90,10 +90,8 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
         flag = false;
         line = buffer;
-        printf("Read '%s' from file!\n", line);
 
         if (matches(prefix, buffer)) {
-            printf("'%s' matches buffer!\n", line);
             line = funct == NULL ? NULL : funct(buffer);
             found = true;
             flag = true;
@@ -101,7 +99,6 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
         if (line != NULL) {
             fwrite(line, sizeof(char), strlen(line), tempFile);
-            printf("'%s' was written!\n", line);
             if (flag) free(line);
         }
     }

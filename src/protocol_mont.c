@@ -47,11 +47,13 @@ static int send_mont(member* m, uint8_t type) {
 
 int send_mont_req(member *m) {
 
+    printf("# Sent Mont Request to %s\n", m->id);
     return send_mont(m, TYPE_REQ);
 
 }
 int send_mont_rep(member *m) {
 
+    printf("# Sent Mont Reply to %s\n", m->id);
     return send_mont(m, TYPE_REP);
 
 }
@@ -67,8 +69,6 @@ static int read_memb(char** message, member** m) {
     char* id = (char *) malloc(size + 1);
     memcpy(id, *message, size);
     id[size] = '\0';
-
-    printf("Read ID '%s'\n", id);
 
     // Find member
     *m = get_certain_member(id);
@@ -86,9 +86,11 @@ void handle_mont_req(char *message) {
     read_memb(&message, &m);
 
     if (m == NULL) {
-        warning("Failed to read member!\n", NULL);
+        warning("Failed to read or find member!\n", NULL);
         return;
     }
+
+    printf("# Received Mont Request from %s\n", m->id);
 
     // Check if member is a recipient
     if (!(m->state & RECP)) {
@@ -115,6 +117,8 @@ void handle_mont_rep(char *message) {
         warning("Failed to read member!\n", NULL);
         return;
     }
+
+    printf("# Received Mont Reply from %s\n", m->id);
 
     // Check if member has been mounted
     if (!(m->state & MOUNT)) {

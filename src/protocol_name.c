@@ -36,7 +36,7 @@ int send_name_req(char *ip, uint16_t port, member *m) {
 
     serialize_member(m, &aux); // Copy member
 
-    printf("What's my name?\n");
+    printf("# Sent Name Request to %s:%d\n", ip, port);
     return server_send(ip, port, message, size);
 
 }
@@ -67,6 +67,7 @@ int send_name_rep(char *ip, uint16_t port, char *id, size_t id_size, member *m) 
 
     serialize_member(m, &aux); // Serialize member
 
+    printf("# Sent Name Reply to %s:%d\n", ip, port);
     return server_send(ip, port, message, size);
 
 }
@@ -91,7 +92,7 @@ void handle_name_req(char *message) {
     m.id_size = (uint16_t) id_size;
     add_member(&m);
 
-    printf("Generated ID: %s\n", m.id);
+    printf("# Received Name Request from %s\n", m.id);
 
     // Reply the request
     if (send_name_rep(m.ip, m.port, id, id_size, current)) {
@@ -115,6 +116,8 @@ void handle_name_rep(char *message) {
     memcpy(id, message, size);
     id[size] = '\0';
     message += size;
+
+    printf("# Received Name Reply from %s\n", id);
 
     // Assign ID to self
     member* current = get_current_member();

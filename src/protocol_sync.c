@@ -1,5 +1,7 @@
 #include <memory.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 #include "protocol_sync.h"
 #include "members.h"
@@ -29,7 +31,7 @@ static int sync_memb(char* source, member* memb) {
 
 }
 
-static int send_memb_sync_rep(char* ip, uint16_t port) {
+static int send_memb_sync_rep(member* memb) {
 
     uint8_t rep = 1;
     uint8_t type = SYNC_MEMB;
@@ -62,10 +64,11 @@ static int send_memb_sync_rep(char* ip, uint16_t port) {
     char* message_complete = build_members_message(size, message, &size); // Append list of members
     free(message);
 
-    return server_send(ip, port, message_complete, size);
+    printf("# Sent Member Sync Reply to %s\n", memb->id);
+    return server_send(memb->ip, memb->port, message_complete, size);
 
 }
-static int send_memb_sync_req(char* ip, uint16_t port) {
+static int send_memb_sync_req(member* memb) {
 
     uint8_t req = 0;
     uint8_t type = SYNC_MEMB;
@@ -95,13 +98,12 @@ static int send_memb_sync_req(char* ip, uint16_t port) {
     memcpy(aux, current->id, current->id_size); // Copy ID
     // aux += current->id_size;
 
-    return server_send(ip, port, message, size);
+    printf("# Sent Member Sync Request to %s\n", memb->id);
+    return server_send(memb->ip, memb->port, message, size);
 
 }
 
 static void handle_sync_memb_rep(char* message) {
-
-    printf("Received reply message %s\n", message);
 
     // Read ID Size
     uint16_t size;
@@ -111,6 +113,7 @@ static void handle_sync_memb_rep(char* message) {
     // Read ID
     char* id = (char *) malloc(sizeof(char) * (size + 1));
     memcpy(id, message, size * sizeof(char));
+    message += size * sizeof(char);
     id[size * sizeof(char)] = '\0';
 
     // Find member
@@ -120,36 +123,36 @@ static void handle_sync_memb_rep(char* message) {
         return;
     }
 
+    printf("# Received Member Sync Request from %s\n", id);
+
     // Read Member clock
     uint16_t clock;
     memcpy(&clock, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
-    memb->member_clock = clock;
-
-    printf("%s's clock is now %d\n", id, clock);
 
     // Read Members Number
     uint16_t number;
     memcpy(&number, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
-    printf("%s's number of members is %d\n", id, number);
-    return;
-
     // Read All Members
     int flag = 0;
-    int msize = 0;
+    member* current = get_current_member();
     member* container = (member *) malloc(sizeof(member));
     for (int i = 0; i < number; ++i) {
 
-        msize = deserialize_member(message, container);
-        message += msize;
+        if (deserialize_member(message, container)) {
+            error("Failed to read member from sync reply!\n", NULL);
+            return;
+        }
+        message += size_of_member(container);
 
-        printf("Received member %s\n", container->id);
-
-        //if (sync_memb(id, container)) flag = 1;
-
+        if (strcmp(container->id, current->id) == 0) continue;
+        if (sync_memb(id, container)) flag = 1;
     }
+
+    memb->member_clock = clock;
+    printf("%s's clock is now %d\n", id, clock);
 
     if (flag) inc_member_clock();
     free(container);
@@ -157,8 +160,6 @@ static void handle_sync_memb_rep(char* message) {
 
 }
 static void handle_sync_memb_req(char* message) {
-
-    printf("Received request message %s\n", message);
 
     // Read ID Size
     uint16_t size;
@@ -171,7 +172,7 @@ static void handle_sync_memb_req(char* message) {
     // message += size * sizeof(char);
     id[size * sizeof(char)] = '\0';
 
-     printf("Sync Request from '%s' with size %d\n", id, size);
+    printf("# Received Member Sync Reply from %s\n", id);
 
     // Find Member with that ID
     member* memb = get_certain_member(id);
@@ -182,19 +183,19 @@ static void handle_sync_memb_req(char* message) {
     }
 
     // Send a reply
-    send_sync_rep(memb->ip, memb->port, SYNC_MEMB);
+    send_sync_rep(memb, SYNC_MEMB);
 
 }
 
-int send_sync_req(char* ip, uint16_t port, uint8_t type) {
+int send_sync_req(member* memb, uint8_t type) {
 
-    if (type == SYNC_MEMB) return send_memb_sync_req(ip, port);
+    if (type == SYNC_MEMB) return send_memb_sync_req(memb);
     return 1;
 
 }
-int send_sync_rep(char* ip, uint16_t port, uint8_t type) {
+int send_sync_rep(member* memb, uint8_t type) {
 
-    if (type == SYNC_MEMB) return send_memb_sync_rep(ip, port);
+    if (type == SYNC_MEMB) return send_memb_sync_rep(memb);
     return 1;
 
 }
