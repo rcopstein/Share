@@ -10,8 +10,8 @@
 #include "shared_memory.h"
 
 static const char exportsFile[] = "/etc/exports";
-static const char unmountCmd[] = "sudo umount %s:%s";
-static const char mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
+static const char  unmountCmd[] = "sudo umount %s:%s";
+static const char    mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
 
 // Build NFS Path for member
 static char* build_nfs_path(member* m, size_t *size) {
@@ -100,9 +100,10 @@ static char* _remove_nfs_recp(char* line) {
 }
 int remove_nfs_recp(char* path, char* recipient) {
 
+    if (lock_exports_file()) { return error("Failed to lock exports file!\n", NULL); }
+
     _recp = recipient;
 
-    if (lock_exports_file()) return error("Failed to lock exports file!\n", NULL);
     if (fops_update_line(exportsFile, path, _remove_nfs_recp)) {
         unlock_exports_file();
         return error("Failed to update line!\n", NULL);

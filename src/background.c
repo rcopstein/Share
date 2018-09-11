@@ -8,6 +8,7 @@
 
 #include "protocol_ping.h"
 #include "background.h"
+#include "nfs_ops.h"
 #include "server.h"
 
 // Define thread struct
@@ -66,6 +67,9 @@ static void check_connection(member* m) {
     if (m->state & AVAIL && m->avail >= 4) {
         printf("%s Disconnected!\n", m->id);
         member_unset_state(m, AVAIL);
+
+        // Unmount Inactive Member
+        if (!unmount_nfs_dir(m)) member_unset_state(m, MOUNT);
     }
 
     // Check Reconnection
@@ -98,6 +102,17 @@ static void* loop(void* _bg) {
         check_mount(m);
         sleep(10);
 
+    }
+
+    // Unmount and remove recipient
+    if (member_get_state(m, MOUNT)) {
+        printf("# Umounting %s\n", m->id);
+        unmount_nfs_dir(m);
+    }
+
+    if (member_get_state(m, RECP)) {
+        printf("# Removing Recipient %s\n", m->id);
+        remove_nfs_recp(get_current_member()->prefix, m->ip);
     }
 
     printf("Stopped %s background!\n", m->id);
