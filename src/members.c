@@ -9,6 +9,7 @@
 #include <zconf.h>
 #include <background.h>
 
+#include "portable_semaphores.h"
 #include "protocol_mont.h"
 #include "members.h"
 #include "output.h"
@@ -32,7 +33,7 @@ static uint16_t child_count = 0;
 
 // Version Clock
 static uint16_t member_clock = 0;
-static sem_t* member_clock_sem = NULL;
+static portable_semaphore* member_clock_sem = NULL;
 
 uint16_t get_member_clock() {
 
@@ -41,11 +42,14 @@ uint16_t get_member_clock() {
 }
 uint16_t inc_member_clock() {
 
-    if (member_clock_sem == NULL) member_clock_sem = sem_open("", O_CREAT, 1);
+    if (member_clock_sem == NULL) {
+        member_clock_sem = (portable_semaphore *) malloc(sizeof(portable_semaphore));
+        portable_sem_init(member_clock_sem, 1);
+    }
 
-    sem_wait(member_clock_sem);
+    portable_sem_wait(member_clock_sem);
     ++member_clock;
-    sem_post(member_clock_sem);
+    portable_sem_post(member_clock_sem);
 
     return member_clock;
 

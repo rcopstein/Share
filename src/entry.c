@@ -280,6 +280,8 @@ int parse_delete(int argc, char** argv) {
 
 int main(int argc, char** argv) {
 
+    sem_unlink("etc_exports_mutex");
+
     // Check for minimum number of arguments
     if (argc < 2) return usage();
 

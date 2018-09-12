@@ -100,7 +100,7 @@ static void* loop(void* _bg) {
 
         check_connection(m);
         check_mount(m);
-        sleep(10);
+        sleep(2); // Change this to 10
 
     }
 
@@ -112,7 +112,7 @@ static void* loop(void* _bg) {
 
     if (member_get_state(m, RECP)) {
         printf("# Removing Recipient %s\n", m->id);
-        remove_nfs_recp(get_current_member()->prefix, m->ip);
+        remove_nfs_recp(get_current_member(), m->ip);
     }
 
     printf("Stopped %s background!\n", m->id);

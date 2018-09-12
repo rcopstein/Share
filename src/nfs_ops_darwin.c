@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "fops.h"
 #include "output.h"
@@ -9,9 +10,10 @@
 #include "members.h"
 #include "shared_memory.h"
 
-static const char exportsFile[] = "/etc/exports";
-static const char  unmountCmd[] = "sudo umount %s:%s";
-static const char    mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
+static const char definitionOptions[] = "-fspath=/";
+static const char       exportsFile[] = "/etc/exports";
+static const char        unmountCmd[] = "sudo umount %s:%s";
+static const char          mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
 
 // Build NFS Path for member
 static char* build_nfs_path(member* m, size_t *size) {
@@ -39,7 +41,13 @@ static char* _ip = NULL;
 static char* _path = NULL;
 static char* _add_nfs_recp(char* line) {
 
-    if (line == NULL) line = _path;
+    char* preline = NULL;
+
+    if (line == NULL) {
+        preline = (char *) malloc(strlen(_path) + strlen(definitionOptions) + 2);
+        sprintf(preline, "%s %s", _path, definitionOptions);
+        line = preline;
+    }
 
     size_t size = strlen(line);
     if (line[size-1] == '\n') line[--size] = '\0';
@@ -48,6 +56,7 @@ static char* _add_nfs_recp(char* line) {
     char* nline = (char *) malloc(size * sizeof(char));
     sprintf(nline, "%s %s\n", line, _ip);
 
+    if (preline != NULL) free(preline);
     return nline;
 
 }
@@ -74,6 +83,7 @@ static char* _remove_nfs_recp(char* line) {
     if (line == NULL) return NULL;
     if (_recp == NULL) return line;
 
+    bool found = false;
     size_t size = strlen(line) + 1;
     char *nline = (char *) malloc(size * sizeof(char));
 
@@ -82,15 +92,15 @@ static char* _remove_nfs_recp(char* line) {
     char* token = strtok(line, " \n");
 
     while (token != NULL) {
-        if (strcmp(token, _recp) != 0) {
+        if (strcmp(token, _recp) != 0 || found) {
             sprintf(aux, "%s ", token);
             aux += strlen(token) + 1;
             ++count;
-        }
+        } else found = true;
         token = strtok(NULL, " \n");
     }
 
-    if (count <= 1) {
+    if (count <= 2) {
         free(nline);
         return NULL;
     }
@@ -98,18 +108,19 @@ static char* _remove_nfs_recp(char* line) {
     *(aux - 1) = '\n';
     return nline;
 }
-int remove_nfs_recp(char* path, char* recipient) {
+int remove_nfs_recp(member* m, char* recipient) {
 
     if (lock_exports_file()) { return error("Failed to lock exports file!\n", NULL); }
 
+    size_t size;
+    char* path = build_nfs_path(m, &size);
     _recp = recipient;
 
-    if (fops_update_line(exportsFile, path, _remove_nfs_recp)) {
-        unlock_exports_file();
-        return error("Failed to update line!\n", NULL);
-    }
-
+    int result = fops_update_line(exportsFile, path, _remove_nfs_recp);
     unlock_exports_file();
+    free(path);
+
+    if (result) return error("Failed to update line!\n", NULL);
     return update_nfs();
 }
 
