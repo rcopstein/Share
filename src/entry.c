@@ -17,7 +17,6 @@
 #include "hierarchy.h"
 #include "nfs_ops.h"
 #include "server.h"
-#include "protocol_join.h"
 #include "protocol_name.h"
 #include "background.h"
 
@@ -280,7 +279,7 @@ int parse_delete(int argc, char** argv) {
 
 int main(int argc, char** argv) {
 
-    sem_unlink("etc_exports_mutex");
+    //sem_unlink("etc_exports_mutex");
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();

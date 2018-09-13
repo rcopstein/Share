@@ -5,7 +5,6 @@
 #include "server.h"
 #include "output.h"
 #include "protocol_name.h"
-#include "protocol_join.h"
 #include "protocol_mont.h"
 #include "protocol_ping.h"
 #include "protocol_sync.h"
@@ -28,8 +27,5 @@ void protocol_handle(char* content, size_t size) {
     else if (strncmp("mont", protocol, PROTOCOL_SIZE) == 0) handle_mont_protocol(content);
     else if (strncmp("ping", protocol, PROTOCOL_SIZE) == 0) handle_ping_protocol(content);
     else if (strncmp("sync", protocol, PROTOCOL_SIZE) == 0) handle_sync_protocol(content);
-
-    // else if (strncmp("jrep", protocol, PROTOCOL_SIZE) == 0) handle_join_rep(content);
-    // else if (strncmp("jack", protocol, PROTOCOL_SIZE) == 0) handle_join_ack(content);
     else warning("Received unknown protocol '%s'\n", protocol);
 }

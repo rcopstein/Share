@@ -101,6 +101,7 @@ void handle_mont_req(char *message) {
             return;
         }
 
+        printf("Added %s as a recipient!\n", m->id);
         member_set_state(m, RECP);
 
     }

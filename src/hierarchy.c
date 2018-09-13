@@ -6,174 +6,97 @@
 
 #include "hierarchy.h"
 
-#define TRANSLATOR_LOAD_SUCCESS 0
-#define TRANSLATOR_LOAD_FAILURE 1
+typedef struct _HierarchyNode {
 
-typedef struct _treenode_ {
-    char* path;
-    char* segment;
-    struct _treenode_* next;
-    struct _treenode_* child;
-} treenode;
-treenode root = { "/", "/", NULL, NULL };
+    LogicalFile* file;
+    struct _HierarchyNode* child;
+    struct _HierarchyNode* sibling;
 
-// Removes leading spaces and trailing '\n'
-static char* trim_string(char* string) {
-    size_t buff_len = strlen(string);
-    if (string[buff_len - 1] == '\n') string[buff_len - 1] = '\0';
+} HierarchyNode;
 
-    uint8_t level;
-    for (level = 0; string[level] == ' '; ++level);
+static HierarchyNode* root = NULL;
+static HierarchyNode* find_hierarchy_node(char *path, HierarchyNode** parent, HierarchyNode** prev_sibling) {
 
-    return string + level;
-}
+    char* _path = (char *) malloc(strlen(path) + 1);
+    strcpy(_path, path);
 
-// Allocates a treenode with a given name
-static treenode* create_treenode(char* path) {
-    treenode* node = (treenode*) calloc(1, sizeof(treenode));
-    node->segment = (char*) malloc(sizeof(char) * strlen(path));
-    strcpy(node->segment, path);
-    node->path = NULL;
-    return node;
-}
+    HierarchyNode* aux = root;
+    HierarchyNode* _parent = NULL;
+    HierarchyNode* _prev_sibling = NULL;
 
-// Print the path tree
-/*static void print_treenode(treenode* node, uint8_t lvl) {
-    if (node == NULL) return;
-    for (uint8_t i = 0; i < lvl; ++i) printf("\t");
-    printf("%s\n", node->segment);
-    print_treenode(node->child, (uint8_t)(lvl + 1));
-    print_treenode(node->next, lvl);
-}*/
+    char* sep = "/\n";
+    char* token = NULL;
+    token = strsep(&_path, sep);
 
-// Loads the path tree from a file
-uint8_t hierarchy_load(const char *source_file) {
-    FILE* source = fopen(source_file, "r");
-    if (!source) return TRANSLATOR_LOAD_FAILURE;
+    while (strlen(token) != 0) {
 
-    int8_t lvl[25];
-    char buffer[256];
-    treenode* stack[25];
-    uint8_t stack_ptr = 0;
+        _prev_sibling = NULL;
 
-    lvl[0] = -1;
-    stack[0] = &root;
-
-    while (fgets(buffer, 255, source)) {
-        char* trimmed = trim_string(buffer);
-        uint8_t level = (uint8_t)(trimmed - buffer);
-
-        if ((buffer + level)[0] == ':') {
-
-            stack[stack_ptr]->path = malloc(strlen(buffer) * sizeof(char));
-            strcpy(stack[stack_ptr]->path, buffer + level + 1);
-
-            //printf("File: %s, Path: %s\n", stack[stack_ptr]->segment, stack[stack_ptr]->path);
-
-        } else {
-            treenode* node = create_treenode(buffer + level);
-
-            if (level > lvl[stack_ptr]) {
-                stack[stack_ptr++]->child = node;
-            } else if (level == lvl[stack_ptr]) {
-                stack[stack_ptr]->next = node;
-                stack[stack_ptr] = node;
-            } else {
-                while (lvl[--stack_ptr] != level && stack_ptr > 0) {}
-                stack[stack_ptr]->next = node;
-            }
-
-            stack[stack_ptr] = node;
-            lvl[stack_ptr] = level;
-
-            // printf("> %s %d\n", trimmed, lvl[stack_ptr]);
+        while (aux != NULL) {
+            if (strcmp(aux->file->name, token) == 0) break;
+            _prev_sibling = aux;
+            aux = aux->sibling;
         }
-    }
 
-    //print_treenode(root.child, 0);
+        if (aux == NULL) break;
 
-    fclose(source);
-    return TRANSLATOR_LOAD_SUCCESS;
-}
-
-// Unloads the path tree
-void hierarchy_unload(treenode *node) {
-    if (node == NULL) return;
-    hierarchy_unload(node->child);
-    hierarchy_unload(node->next);
-    free(node->segment);
-    free(node->path);
-    free(node);
-}
-
-// Find a path in the path tree
-char* hierarchy_translate(const char* _path) {
-
-    char path[256];
-    strncpy(path, _path, 255);
-    const char delimiter[2] = "/";
-
-    char* result = NULL;
-    treenode* aux = root.child;
-    char* token = strtok(path, delimiter);
-
-    while (token) {
-        while (aux != NULL && strcmp(aux->segment, token) != 0) {
-            //printf("Token is: %s, Segment is: %s\n", token, aux->segment);
-            aux = aux->next;
-        }
-        if (aux == NULL) return NULL;
-
-        //printf("Found segment: %s\n", aux->segment);
-
-        token = strtok(NULL, delimiter);
-        result = aux->path;
+        _parent = aux;
         aux = aux->child;
+
+        token = strsep(&_path, sep);
     }
 
-    if (result == NULL) result = (char *) _path;
-    //printf("Translated '%s' to '%s'\n", _path, result);
+    free(_path);
+    return aux;
+}
+
+LogicalFile* create_logical_file(bool isDir, char* name, char* owner) {
+
+    LogicalFile* result = (LogicalFile *) malloc(sizeof(LogicalFile));
+
+    result->isDir = isDir;
+
+    result->name = (char *) malloc(strlen(name) + 1);
+    strcpy(result->name, name);
+
+    result->owner = (char *) malloc(strlen(owner) + 1);
+    strcpy(result->owner, owner);
 
     return result;
+
+}
+LogicalFile* copy_logical_file(LogicalFile* file) {
+    return create_logical_file(file->isDir, file->name, file->owner);
 }
 
-// Load the file nodes in a path
-FileNode* hierarchy_list(const char* _path) {
+int add_logical_file(char* path, LogicalFile* file) {
 
-    char path[256];
-    strncpy(path, _path, 255);
+    HierarchyNode* add_point = find_hierarchy_node(path, NULL, NULL);
+    if (add_point == NULL || !add_point->file->isDir) return 1;
 
-    const char delimiter[2] = "/";
-    treenode* aux = root.child;
+    HierarchyNode* to_add = (HierarchyNode *) malloc(sizeof(HierarchyNode));
+    to_add->file = copy_logical_file(file);
+    to_add->sibling = NULL;
+    to_add->child = NULL;
 
-    char* token = strtok((char *)path, delimiter);
+    HierarchyNode** aux = &add_point->sibling;
+    while (*aux != NULL) aux = &(*aux)->sibling;
+    *aux = to_add;
 
-    while (token) {
-        while (aux != NULL && strcmp(aux->segment, token) != 0) aux = aux->next;
-        if (aux == NULL) return NULL;
+    return 0;
 
-        token = strtok(NULL, delimiter);
-        aux = aux->child;
-    }
+}
 
-    FileNode* first = NULL;
-    FileNode* src = NULL;
+LogicalFile* get_logical_file(char* path) {
 
-    while (aux != NULL) {
+    HierarchyNode* file = find_hierarchy_node(path, NULL, NULL);
+    if (file == NULL) return NULL;
+    return file->file;
 
-        FileNode* node = (FileNode *) malloc(sizeof(FileNode));
-        strncpy(node->name, aux->segment, 49);
-        node->isDir = aux->path == NULL;
-        node->next = NULL;
+}
 
-        if (src != NULL) src->next = node;
-        else first = node;
-        src = node;
+int rem_logical_file(char* path) {
 
-        aux = aux->next;
-
-    }
-
-    return first;
+    return 1;
 
 }

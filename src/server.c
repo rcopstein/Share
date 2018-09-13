@@ -55,7 +55,7 @@ void* _server_start(void* vport) {
         return NULL;
     }
 
-    printf("===\n");
+    // printf("===\n");
 
     for (;;) {
 
@@ -90,9 +90,10 @@ void* _server_start(void* vport) {
         free(buffer);
 
         nops_close_connection(client_socket);
-        printf("===\n");
+        // printf("===\n");
     }
 
+    nops_close_connection(server_socket);
     return NULL;
 }
 int server_start(uint16_t _port) {

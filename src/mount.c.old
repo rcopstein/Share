@@ -67,7 +67,8 @@ gid_t mount_gid;
 // Methods
 static int loopback_getattr(const char *_path, struct stat *stbuf)
 {
-    const char* path = hierarchy_translate(_path);
+    //const char* path = hierarchy_translate(_path);
+    const char* path = _path;
 
     int res;
     res = lstat(path, stbuf);
