@@ -138,7 +138,9 @@ int create(char* ip, uint16_t port) {
     //add_nfs_recp(get_current_member(), "111.111.111.111");
 
     mount("/Users/rcopstein/Desktop/s3");
-    server_wait();
+    stop_wait_all_background();
+    //server_wait();
+
     return 0;
 }
 int parse_create(int argc, char** argv) {
@@ -241,7 +243,7 @@ int main(int argc, char** argv) {
     if (argc < 2) return usage();
 
     // Register Interruption Handler
-    signal(SIGINT, on_interrupt);
+    //signal(SIGINT, on_interrupt);
 
     // Read command
     char* command = argv[1];

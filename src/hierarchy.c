@@ -191,11 +191,12 @@ LogicalFile** list_logical_files(char* path) {
     HierarchyNode* folder = find_node(path);
     if (folder == NULL || !folder->file->isDir) return NULL;
 
-    LogicalFile** list = (LogicalFile **) malloc(folder->child_count * sizeof(LogicalFile *));
+    LogicalFile** list = (LogicalFile **) malloc((folder->child_count + 1) * sizeof(LogicalFile *));
     folder = folder->child;
 
     int count = 0;
     while (folder != NULL) list[count++] = folder->file;
+    list[count] = NULL;
 
     return list;
 }

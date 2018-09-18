@@ -67,6 +67,7 @@ gid_t mount_gid;
 // Methods
 static int loopback_getattr(const char *_path, struct stat *stbuf)
 {
+    printf("# GET ATTRIBUTE\n");
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -98,6 +99,8 @@ static int loopback_getattr(const char *_path, struct stat *stbuf)
 
 static int loopback_fgetattr(const char *_path, struct stat *stbuf, struct fuse_file_info *fi)
 {
+    printf("# FGET ATTRIBUTE\n");
+
     int res;
     (void)_path;
 
@@ -114,6 +117,7 @@ static int loopback_fgetattr(const char *_path, struct stat *stbuf, struct fuse_
 
 static int loopback_readlink(const char *_path, char *buf, size_t size)
 {
+    printf("# READ LINK\n");
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -133,6 +137,7 @@ static int loopback_readlink(const char *_path, char *buf, size_t size)
 
 static int loopback_opendir(const char *_path, struct fuse_file_info *fi)
 {
+    printf("# OPEN DIR\n");
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -163,6 +168,7 @@ static int loopback_opendir(const char *_path, struct fuse_file_info *fi)
 
 static inline struct loopback_dirp* get_dirp(struct fuse_file_info *fi)
 {
+    printf("# GET DIRP\n");
     return (struct loopback_dirp *)(uintptr_t)fi->fh;
 }
 
@@ -196,6 +202,8 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         d->offset = nextoff;
     }*/
 
+    printf("# READ DIR\n");
+
     filler( buf, ".", NULL, 0 ); // Current Directory
     filler( buf, "..", NULL, 0 ); // Parent Directory
 
@@ -217,6 +225,8 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int loopback_releasedir(const char *_path, struct fuse_file_info *fi)
 {
+    printf("# RELEASE DIR\n");
+
     (void)_path;
     struct loopback_dirp *d = get_dirp(fi);
 
@@ -228,6 +238,8 @@ static int loopback_releasedir(const char *_path, struct fuse_file_info *fi)
 
 static int loopback_mknod(const char *_path, mode_t mode, dev_t rdev)
 {
+    printf("# MAKE NODE\n");
+
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -247,6 +259,8 @@ static int loopback_mknod(const char *_path, mode_t mode, dev_t rdev)
 
 static int loopback_mkdir(const char *_path, mode_t mode)
 {
+    printf("# MAKE DIR\n");
+
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -265,6 +279,8 @@ static int loopback_mkdir(const char *_path, mode_t mode)
 
 static int loopback_unlink(const char *_path)
 {
+    printf("# UNLINK\n");
+
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
@@ -283,6 +299,8 @@ static int loopback_unlink(const char *_path)
 
 static int loopback_rmdir(const char *_path)
 {
+    printf("# REMOVE DIR\n");
+
     printf("The path is: %s\n", _path);
 
     LogicalFile* file = get_logical_file((char *) _path);
