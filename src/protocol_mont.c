@@ -38,6 +38,8 @@ static int send_mont(member* m, uint8_t type) {
     memcpy(aux, &(current->id_size), sizeof(uint16_t)); // Copy ID Size
     aux += sizeof(uint16_t);
 
+    printf("\nThe ID Size sent with mont is: %d\n\n", current->id_size);
+
     memcpy(aux, current->id, current->id_size); // Copy ID
     // aux += get_current_member()->id_size;
 

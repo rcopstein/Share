@@ -281,6 +281,8 @@ int deserialize_member(char *input, member *container) {
     container->prefix_size = size;
     aux += sizeof(uint16_t);
 
+    printf("\n### Read Prefix size when deserializing member: %d\n\n", size);
+
     container->prefix = (char *) malloc(size + 1); // Read the prefix
     strncpy(container->prefix, aux, size);
     container->prefix[size] = '\0';

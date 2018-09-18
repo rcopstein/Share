@@ -84,6 +84,25 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 }
 
+
+// Mount
+
+int mount(char* path) {
+
+    // Create a list of char*
+    char** list = malloc(sizeof(char*) * 3);
+    char foreground[] = "-f";
+
+    // First pointer is ignored, Second pointer is the path
+    list[0] = list[1] = path;
+    list[2] = foreground;
+
+    // Call mount
+    mount_dir(3, list);
+    return 0;
+}
+
+
 // Create
 
 int clean_create() {
@@ -118,6 +137,7 @@ int create(char* ip, uint16_t port) {
     // REMOVE THIS LATER
     //add_nfs_recp(get_current_member(), "111.111.111.111");
 
+    mount("/Users/rcopstein/Desktop/s3");
     server_wait();
     return 0;
 }
@@ -148,6 +168,7 @@ int parse_create(int argc, char** argv) {
     // Call Create
     return create(ip, port);
 }
+
 
 // Join
 
@@ -209,71 +230,6 @@ int parse_join(int argc, char** argv) {
     return join(server, server_port, client, client_port);
 }
 
-// Mount
-
-/*
-int mount(char* path) {
-
-    // Load hierarchy
-    hierarchy_load(METADATA_HIERARCHY);
-
-    // Create a list of char*
-    char** list = malloc(sizeof(char*) * 3);
-    char foreground[] = "-f";
-
-    // First pointer is ignored, Second pointer is the path
-    list[0] = list[1] = path;
-    list[2] = foreground;
-
-    // Call mount
-    mount_dir(3, list);
-    return 0;
-}
-
-int parse_mount(int argc, char** argv) {
-    if (argc < 1) return error("Missing path!\n", NULL);
-    return mount(argv[0]);
-}
-
-// Delete
-
-int delete(uint16_t id) {
-
-    // Read members
-    members = read_members((char *)METADATA_MEMBERS);
-    if (members == NULL)
-        return error("Failed to read members file!\n", NULL);
-
-    // Build message
-    char message[25];
-    sprintf(message, "remm%d", id);
-    printf("> %s\n", message);
-
-    // Send removal to all members
-    int other;
-    member* aux = members;
-    while (aux != NULL) {
-
-        if ((other = nops_open_connection(aux->ip, aux->port))) {
-            error("Failed to send message to %s\n", aux->ip);
-            continue;
-        }
-
-        send(other, message, 7, 0);
-        nops_close_connection(other);
-        aux = aux->next;
-    }
-
-    return 0;
-}
-
-int parse_delete(int argc, char** argv) {
-
-    uint16_t id = (uint16_t) strtol(argv[0], NULL, 10);
-    return delete(id);
-
-}
-*/
 
 // Main
 
@@ -292,8 +248,5 @@ int main(int argc, char** argv) {
 
     if (strcmp(command, "create") == 0) return parse_create(argc - 2, argv + 2);
     else if (strcmp(command, "join") == 0) return parse_join(argc - 2, argv + 2);
-    // else if (strcmp(command, "mount") == 0) return parse_mount(argc - 2, argv + 2);
-    // else if (strcmp(command, "remove") == 0) return parse_delete(argc - 2, argv + 2);
     else return error("Unknown command '%s'\n", command);
-
 }
