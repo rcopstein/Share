@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "hierarchy.h"
 
@@ -122,13 +123,16 @@ int rem_logical_file(char* path) {
     char* filename = lastsep + 1; // Get a pointer to the file/folder name
 
     HierarchyNode* parent = find_node(_path);
-    if (parent == NULL) return 1;
+    if (parent == NULL) return -ENOENT;
 
     HierarchyNode* previous = NULL;
     HierarchyNode* current = parent->child;
 
     while (current != NULL) {
         if (strcmp(current->file->name, filename) == 0) {
+
+            if (current->folder_count > 0 || current->file_count > 0) return -ENOTEMPTY;
+
             if (previous != NULL) previous->sibling = current->sibling;
             else parent->child = current->sibling;
 

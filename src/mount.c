@@ -95,62 +95,6 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
-static int
-loopback_fgetattr(const char *path, struct stat *stbuf,
-                  struct fuse_file_info *fi)
-{
-    int res;
-
-    (void)path;
-
-    res = fstat(fi->fh, stbuf);
-
-#if FUSE_VERSION >= 29
-    // Fall back to global I/O size. See loopback_getattr().
-    stbuf->st_blksize = 0;
-#endif
-
-    if (res == -1) {
-        return -errno;
-    }
-
-    return 0;
-}
-
-static int
-loopback_readlink(const char *path, char *buf, size_t size)
-{
-    ssize_t res = readlink(path, buf, size - 1);
-    if (res == -1) return -errno;
-    buf[res] = '\0';
-    return 0;
-}
-
-static int
-loopback_opendir(const char *path, struct fuse_file_info *fi)
-{
-    int res;
-
-    struct loopback_dirp *d = malloc(sizeof(struct loopback_dirp));
-    if (d == NULL) {
-        return -ENOMEM;
-    }
-
-    d->dp = opendir(path);
-    if (d->dp == NULL) {
-        res = -errno;
-        free(d);
-        return res;
-    }
-
-    d->offset = 0;
-    d->entry = NULL;
-
-    fi->fh = (unsigned long)d;
-
-    return 0;
-}
-
 static inline struct loopback_dirp *get_dirp(struct fuse_file_info *fi)
 {
     return (struct loopback_dirp *)(uintptr_t)fi->fh;
@@ -207,6 +151,156 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     return 0;
 }
 
+static int loopback_mkdir(const char *path, mode_t mode)
+{
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    strcpy(_path, path);
+
+    char* lastsep = strrchr(_path, '/'); // Find the last occurrence of '/'
+    *lastsep = '\0';
+
+    LogicalFile* lfolder = create_logical_file(true, lastsep + 1, get_current_member()->id, "");
+    int result = add_logical_file(_path, lfolder);
+
+    free_logical_file(lfolder);
+    free(_path);
+
+    if (result) return -ENOENT;
+    return 0;
+}
+
+static int loopback_rmdir(const char *path)
+{
+    return rem_logical_file((char *) path);
+}
+
+static int loopback_open(const char *path, struct fuse_file_info *fi)
+{
+    LogicalFile* file = get_logical_file((char *) path);
+    if (file == NULL) return -ENOENT;
+
+    int fd = open(file->realpath, fi->flags);
+    if (fd == -1) return -errno;
+    fi->fh = (uint64_t) fd;
+    return 0;
+}
+
+static int loopback_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+{
+    ssize_t res = pread((int) fi->fh, buf, size, offset);
+    if (res == -1) {
+        res = -errno;
+    }
+
+    return (int) res;
+}
+
+static int loopback_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+{
+    ssize_t res = pwrite((int) fi->fh, buf, size, offset);
+    if (res == -1) res = -errno;
+    return (int) res;
+}
+
+static int loopback_rename(const char *from, const char *to)
+{
+    char* _from_path = (char *) malloc(strlen(from) + 1); // Copy path to we don't mess with params
+    strcpy(_from_path, from);
+
+    char* _to_path = (char *) malloc(strlen(to) + 1); // Copy path to we don't mess with params
+    strcpy(_to_path, to);
+
+    char* _from_name = strrchr(_from_path, '/'); // Find the last occurrence of '/'
+    *_from_name = '\0';
+    _from_name++;
+
+    char* _to_name = strrchr(_to_path, '/'); // Find the last occurrence of '/'
+    *_to_name = '\0';
+    _to_name++;
+
+    int result;
+    printf("Renamed paths %s %s\n", _from_path, _to_path);
+    printf("From name %s to %s\n", _from_name, _to_name);
+
+    if (strcmp(_to_path, _from_path) == 0) {
+
+        LogicalFile* file = get_logical_file((char *) from);
+        if (file == NULL) result = -ENOENT;
+        else {
+            free(file->name);
+            file->name = (char *) malloc(sizeof(char) * (strlen(_to_name) + 1));
+            strcpy(file->name, _to_name);
+            result = 0;
+        }
+
+    } else result = -EPERM;
+
+    free(_from_path);
+    free(_to_path);
+
+    return result;
+}
+
+
+
+
+
+static int
+loopback_fgetattr(const char *path, struct stat *stbuf,
+                  struct fuse_file_info *fi)
+{
+    int res;
+
+    (void)path;
+
+    res = fstat(fi->fh, stbuf);
+
+#if FUSE_VERSION >= 29
+    // Fall back to global I/O size. See loopback_getattr().
+    stbuf->st_blksize = 0;
+#endif
+
+    if (res == -1) {
+        return -errno;
+    }
+
+    return 0;
+}
+
+static int
+loopback_readlink(const char *path, char *buf, size_t size)
+{
+    ssize_t res = readlink(path, buf, size - 1);
+    if (res == -1) return -errno;
+    buf[res] = '\0';
+    return 0;
+}
+
+static int
+loopback_opendir(const char *path, struct fuse_file_info *fi)
+{
+    int res;
+
+    struct loopback_dirp *d = malloc(sizeof(struct loopback_dirp));
+    if (d == NULL) {
+        return -ENOMEM;
+    }
+
+    d->dp = opendir(path);
+    if (d->dp == NULL) {
+        res = -errno;
+        free(d);
+        return res;
+    }
+
+    d->offset = 0;
+    d->entry = NULL;
+
+    fi->fh = (unsigned long)d;
+
+    return 0;
+}
+
 static int
 loopback_releasedir(const char *path, struct fuse_file_info *fi)
 {
@@ -238,24 +332,6 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
     return 0;
 }
 
-static int loopback_mkdir(const char *path, mode_t mode)
-{
-    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
-    strcpy(_path, path);
-
-    char* lastsep = strrchr(_path, '/'); // Find the last occurrence of '/'
-    *lastsep = '\0';
-
-    LogicalFile* lfolder = create_logical_file(true, lastsep + 1, get_current_member()->id, "");
-    int result = add_logical_file(_path, lfolder);
-
-    free_logical_file(lfolder);
-    free(_path);
-
-    if (result) return -ENOENT;
-    return 0;
-}
-
 static int
 loopback_unlink(const char *path)
 {
@@ -270,37 +346,11 @@ loopback_unlink(const char *path)
 }
 
 static int
-loopback_rmdir(const char *path)
-{
-    int res;
-
-    res = rmdir(path);
-    if (res == -1) {
-        return -errno;
-    }
-
-    return 0;
-}
-
-static int
 loopback_symlink(const char *from, const char *to)
 {
     int res;
 
     res = symlink(from, to);
-    if (res == -1) {
-        return -errno;
-    }
-
-    return 0;
-}
-
-static int
-loopback_rename(const char *from, const char *to)
-{
-    int res;
-
-    res = rename(from, to);
     if (res == -1) {
         return -errno;
     }
@@ -632,43 +682,6 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     return 0;
 }
 
-static int loopback_open(const char *path, struct fuse_file_info *fi)
-{
-    LogicalFile* file = get_logical_file((char *) path);
-    if (file == NULL) return -ENOENT;
-
-    int fd = open(file->realpath, fi->flags);
-    if (fd == -1) return -errno;
-    fi->fh = (uint64_t) fd;
-    return 0;
-}
-
-static int loopback_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-{
-    ssize_t res = pread((int) fi->fh, buf, size, offset);
-    if (res == -1) {
-        res = -errno;
-    }
-
-    return (int) res;
-}
-
-static int
-loopback_write(const char *path, const char *buf, size_t size,
-               off_t offset, struct fuse_file_info *fi)
-{
-    int res;
-
-    (void)path;
-
-    res = pwrite(fi->fh, buf, size, offset);
-    if (res == -1) {
-        res = -errno;
-    }
-
-    return res;
-}
-
 static int
 loopback_statfs(const char *path, struct statvfs *stbuf)
 {
@@ -966,7 +979,7 @@ static const struct fuse_opt loopback_opts[] = {
 void mount_dir(int argc, char *argv[])
 {
     LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file = create_logical_file(false, "potato.txt", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* file = create_logical_file(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
     add_logical_file("/", folder);
     add_logical_file("/Potatoes/", file);
