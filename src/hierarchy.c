@@ -15,7 +15,7 @@ typedef struct _HierarchyNode {
 
 } HierarchyNode;
 
-static LogicalFile root_folder = { .isDir = true, .name = "/", .owner = "", .realpath = "./" };
+static LogicalFile root_folder = { .isDir = true, .name = "/", .owner = "", .realpath = "/Users/rcopstein/Desktop/s1" };
 static HierarchyNode root = { .file = &root_folder, .child = NULL, .sibling = NULL, .child_count = 0 };
 
 static HierarchyNode* find_node(char* path) {
@@ -195,7 +195,7 @@ LogicalFile** list_logical_files(char* path) {
     folder = folder->child;
 
     int count = 0;
-    while (folder != NULL) list[count++] = folder->file;
+    while (folder != NULL) { list[count++] = folder->file; folder = folder->sibling; }
     list[count] = NULL;
 
     return list;

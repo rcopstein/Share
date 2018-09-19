@@ -64,45 +64,30 @@ char buffer[256];
 uid_t mount_uid;
 gid_t mount_gid;
 
-// Methods
-static int loopback_getattr(const char *_path, struct stat *stbuf)
+// Functions
+static int loopback_getattr(const char *path, struct stat *stbuf)
 {
-    printf("# GET ATTRIBUTE\n");
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
-    res = lstat(path, stbuf);
 
-    if (path != NULL && strcmp(path, "./") == 0) {
-        stbuf->st_uid = mount_uid;
-        stbuf->st_gid = mount_gid;
-    }
+    LogicalFile* file = get_logical_file((char *) path);
+    if (file != NULL) res = lstat(file->realpath, stbuf);
+    else res = lstat(path, stbuf);
 
-    #if FUSE_VERSION >= 29
-        //
-        // The optimal I/O size can be set on a per-file basis. Setting st_blksize
-        // to zero will cause the kernel extension to fall back on the global I/O
-        // size which can be specified at mount-time (option iosize).
-        //
-        stbuf->st_blksize = 0;
-    #endif
+#if FUSE_VERSION >= 29
+    stbuf->st_blksize = 0;
+#endif
 
     if (res == -1) return -errno;
     return 0;
 }
 
-static int loopback_fgetattr(const char *_path, struct stat *stbuf, struct fuse_file_info *fi)
+static int
+loopback_fgetattr(const char *path, struct stat *stbuf,
+                  struct fuse_file_info *fi)
 {
-    printf("# FGET ATTRIBUTE\n");
-
     int res;
-    (void)_path;
+
+    (void)path;
 
     res = fstat(fi->fh, stbuf);
 
@@ -111,48 +96,39 @@ static int loopback_fgetattr(const char *_path, struct stat *stbuf, struct fuse_
     stbuf->st_blksize = 0;
 #endif
 
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
+
     return 0;
 }
 
-static int loopback_readlink(const char *_path, char *buf, size_t size)
+static int
+loopback_readlink(const char *path, char *buf, size_t size)
 {
-    printf("# READ LINK\n");
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
-    res = readlink(path, buf, size - 1);
 
-    if (res == -1) return -errno;
+    res = readlink(path, buf, size - 1);
+    if (res == -1) {
+        return -errno;
+    }
+
     buf[res] = '\0';
 
     return 0;
 }
 
-static int loopback_opendir(const char *_path, struct fuse_file_info *fi)
+static int
+loopback_opendir(const char *path, struct fuse_file_info *fi)
 {
-    printf("# OPEN DIR\n");
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     struct loopback_dirp *d = malloc(sizeof(struct loopback_dirp));
-    if (d == NULL) return -ENOMEM;
+    if (d == NULL) {
+        return -ENOMEM;
+    }
 
     d->dp = opendir(path);
-
     if (d->dp == NULL) {
         res = -errno;
         free(d);
@@ -161,21 +137,36 @@ static int loopback_opendir(const char *_path, struct fuse_file_info *fi)
 
     d->offset = 0;
     d->entry = NULL;
+
     fi->fh = (unsigned long)d;
 
     return 0;
 }
 
-static inline struct loopback_dirp* get_dirp(struct fuse_file_info *fi)
+static inline struct loopback_dirp *
+get_dirp(struct fuse_file_info *fi)
 {
-    printf("# GET DIRP\n");
     return (struct loopback_dirp *)(uintptr_t)fi->fh;
 }
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    /*(void)path;
+    LogicalFile** list = list_logical_files((char *) path);
+    if (list == NULL) return -ENOENT;
+
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+
+    int count = 0;
+    LogicalFile* aux;
+
+    while ((aux = list[count++]) != NULL) filler(buf, aux->name, NULL, 0);
+    return 0;
+
     struct loopback_dirp *d = get_dirp(fi);
+    if (d == NULL) return -ENOENT;
+
+    (void)path;
 
     if (offset != d->offset) {
         seekdir(d->dp, offset);
@@ -189,46 +180,32 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
         if (!d->entry) {
             d->entry = readdir(d->dp);
-            if (!d->entry) break;
+            if (!d->entry) {
+                break;
+            }
         }
 
         memset(&st, 0, sizeof(st));
         st.st_ino = d->entry->d_ino;
         st.st_mode = d->entry->d_type << 12;
         nextoff = telldir(d->dp);
-        if (filler(buf, d->entry->d_name, &st, nextoff)) break;
+        if (filler(buf, d->entry->d_name, &st, nextoff)) {
+            break;
+        }
 
         d->entry = NULL;
         d->offset = nextoff;
-    }*/
-
-    printf("# READ DIR\n");
-
-    filler( buf, ".", NULL, 0 ); // Current Directory
-    filler( buf, "..", NULL, 0 ); // Parent Directory
-
-    LogicalFile** files = list_logical_files((char *) path);
-    LogicalFile* aux = files[0];
-
-    while (aux != NULL) filler(buf, (aux++)->name, NULL, 0);
-
-    /*
-    if ( strcmp( path, "/" ) == 0 ) // If the user is trying to show the files/directories of the root directory show the following
-    {
-        filler( buf, "file54", NULL, 0 );
-        filler( buf, "file349", NULL, 0 );
     }
-    */
 
     return 0;
 }
 
-static int loopback_releasedir(const char *_path, struct fuse_file_info *fi)
+static int
+loopback_releasedir(const char *path, struct fuse_file_info *fi)
 {
-    printf("# RELEASE DIR\n");
-
-    (void)_path;
     struct loopback_dirp *d = get_dirp(fi);
+
+    (void)path;
 
     closedir(d->dp);
     free(d);
@@ -236,134 +213,120 @@ static int loopback_releasedir(const char *_path, struct fuse_file_info *fi)
     return 0;
 }
 
-static int loopback_mknod(const char *_path, mode_t mode, dev_t rdev)
+static int
+loopback_mknod(const char *path, mode_t mode, dev_t rdev)
 {
-    printf("# MAKE NODE\n");
-
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
-    if (S_ISFIFO(mode)) res = mkfifo(path, mode);
-    else res = mknod(path, mode, rdev);
-    if (res == -1) return -errno;
+    if (S_ISFIFO(mode)) {
+        res = mkfifo(path, mode);
+    } else {
+        res = mknod(path, mode, rdev);
+    }
+
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_mkdir(const char *_path, mode_t mode)
+static int
+loopback_mkdir(const char *path, mode_t mode)
 {
-    printf("# MAKE DIR\n");
-
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     res = mkdir(path, mode);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_unlink(const char *_path)
+static int
+loopback_unlink(const char *path)
 {
-    printf("# UNLINK\n");
-
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     res = unlink(path);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_rmdir(const char *_path)
+static int
+loopback_rmdir(const char *path)
 {
-    printf("# REMOVE DIR\n");
-
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     res = rmdir(path);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-// CHECK OPERATIONS
-static int loopback_symlink(const char *from, const char *to)
+static int
+loopback_symlink(const char *from, const char *to)
 {
     int res;
 
     res = symlink(from, to);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_rename(const char *from, const char *to)
+static int
+loopback_rename(const char *from, const char *to)
 {
     int res;
 
     res = rename(from, to);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_exchange(const char *path1, const char *path2, unsigned long options)
+static int
+loopback_exchange(const char *path1, const char *path2, unsigned long options)
 {
     int res;
 
     res = exchangedata(path1, path2, options);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
 
-static int loopback_link(const char *from, const char *to)
+static int
+loopback_link(const char *from, const char *to)
 {
     int res;
 
     res = link(from, to);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
 
     return 0;
 }
-// END CHECK OPERATIONS
 
 #if HAVE_FSETATTR_X
 
-static int loopback_fsetattr_x(const char *_path,
-                               struct setattr_x *attr,
-                               struct fuse_file_info *fi)
+static int
+loopback_fsetattr_x(const char *path, struct setattr_x *attr,
+                    struct fuse_file_info *fi)
 {
     int res;
     uid_t uid = -1;
@@ -481,18 +444,11 @@ static int loopback_fsetattr_x(const char *_path,
     return 0;
 }
 
-#endif
+#endif /* HAVE_FSETATTR_X */
 
-static int loopback_setattr_x(const char *_path, struct setattr_x *attr)
+static int
+loopback_setattr_x(const char *path, struct setattr_x *attr)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
     uid_t uid = -1;
     gid_t gid = -1;
@@ -609,16 +565,10 @@ static int loopback_setattr_x(const char *_path, struct setattr_x *attr)
     return 0;
 }
 
-static int loopback_getxtimes(const char *_path, struct timespec *bkuptime, struct timespec *crtime)
+static int
+loopback_getxtimes(const char *path, struct timespec *bkuptime,
+                   struct timespec *crtime)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res = 0;
     struct attrlist attributes;
 
@@ -656,16 +606,9 @@ static int loopback_getxtimes(const char *_path, struct timespec *bkuptime, stru
     return 0;
 }
 
-static int loopback_create(const char *_path, mode_t mode, struct fuse_file_info *fi)
+static int
+loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int fd;
 
     fd = open(path, fi->flags, mode);
@@ -677,44 +620,34 @@ static int loopback_create(const char *_path, mode_t mode, struct fuse_file_info
     return 0;
 }
 
-static int loopback_open(const char *_path, struct fuse_file_info *fi)
+static int loopback_open(const char *path, struct fuse_file_info *fi)
 {
-    printf("The path is: %s\n", _path);
+    LogicalFile* file = get_logical_file((char *) path);
+    if (file == NULL) return -ENOENT;
 
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
-    int fd;
-
-    fd = open(path, fi->flags);
-    if (fd == -1) {
-        return -errno;
-    }
-
-    fi->fh = fd;
+    int fd = open(file->realpath, fi->flags);
+    if (fd == -1) return -errno;
+    fi->fh = (uint64_t) fd;
     return 0;
 }
 
-static int loopback_read(const char *_path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+static int loopback_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-    int res;
-    (void)_path;
-
-    res = pread(fi->fh, buf, size, offset);
+    ssize_t res = pread((int) fi->fh, buf, size, offset);
     if (res == -1) {
         res = -errno;
     }
 
-    return res;
+    return (int) res;
 }
 
-static int loopback_write(const char *_path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+static int
+loopback_write(const char *path, const char *buf, size_t size,
+               off_t offset, struct fuse_file_info *fi)
 {
     int res;
-    (void)_path;
+
+    (void)path;
 
     res = pwrite(fi->fh, buf, size, offset);
     if (res == -1) {
@@ -724,27 +657,25 @@ static int loopback_write(const char *_path, const char *buf, size_t size, off_t
     return res;
 }
 
-static int loopback_statfs(const char *_path, struct statvfs *stbuf)
+static int
+loopback_statfs(const char *path, struct statvfs *stbuf)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     res = statvfs(path, stbuf);
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
+
     return 0;
 }
 
-static int loopback_flush(const char *_path, struct fuse_file_info *fi)
+static int
+loopback_flush(const char *path, struct fuse_file_info *fi)
 {
     int res;
-    (void)_path;
+
+    (void)path;
 
     res = close(dup(fi->fh));
     if (res == -1) {
@@ -754,20 +685,22 @@ static int loopback_flush(const char *_path, struct fuse_file_info *fi)
     return 0;
 }
 
-static int loopback_release(const char *_path, struct fuse_file_info *fi)
+static int
+loopback_release(const char *path, struct fuse_file_info *fi)
 {
-    (void)_path;
+    (void)path;
 
     close(fi->fh);
 
     return 0;
 }
 
-static int loopback_fsync(const char *_path, int isdatasync, struct fuse_file_info *fi)
+static int
+loopback_fsync(const char *path, int isdatasync, struct fuse_file_info *fi)
 {
     int res;
 
-    (void)_path;
+    (void)path;
 
     (void)isdatasync;
 
@@ -779,16 +712,10 @@ static int loopback_fsync(const char *_path, int isdatasync, struct fuse_file_in
     return 0;
 }
 
-static int loopback_setxattr(const char *_path, const char *name, const char *value, size_t size, int flags, uint32_t position)
+static int
+loopback_setxattr(const char *path, const char *name, const char *value,
+                  size_t size, int flags, uint32_t position)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     if (!strncmp(name, XATTR_APPLE_PREFIX, sizeof(XATTR_APPLE_PREFIX) - 1)) {
@@ -815,17 +742,10 @@ static int loopback_setxattr(const char *_path, const char *name, const char *va
     return 0;
 }
 
-static int loopback_getxattr(const char *_path, const char *name, char *value, size_t size,
-                             uint32_t position)
+static int
+loopback_getxattr(const char *path, const char *name, char *value, size_t size,
+                  uint32_t position)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     if (strcmp(name, A_KAUTH_FILESEC_XATTR) == 0) {
@@ -848,16 +768,9 @@ static int loopback_getxattr(const char *_path, const char *name, char *value, s
     return res;
 }
 
-static int loopback_listxattr(const char *_path, char *list, size_t size)
+static int
+loopback_listxattr(const char *path, char *list, size_t size)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     ssize_t res = listxattr(path, list, size, XATTR_NOFOLLOW);
     if (res > 0) {
         if (list) {
@@ -891,16 +804,9 @@ static int loopback_listxattr(const char *_path, char *list, size_t size)
     return res;
 }
 
-static int loopback_removexattr(const char *_path, const char *name)
+static int
+loopback_removexattr(const char *path, const char *name)
 {
-    printf("The path is: %s\n", _path);
-
-    LogicalFile* file = get_logical_file((char *) _path);
-    if (file == NULL) return -ENOENT; // No entity found!
-    const char* path = file->realpath;
-
-    printf("Translated to %s\n", path);
-
     int res;
 
     if (strcmp(name, A_KAUTH_FILESEC_XATTR) == 0) {
@@ -926,7 +832,7 @@ static int loopback_removexattr(const char *_path, const char *name)
 #if FUSE_VERSION >= 29
 
 static int
-loopback_fallocate(const char *_path, int mode, off_t offset, off_t length,
+loopback_fallocate(const char *path, int mode, off_t offset, off_t length,
                    struct fuse_file_info *fi)
 {
     fstore_t fstore;
@@ -959,14 +865,16 @@ loopback_fallocate(const char *_path, int mode, off_t offset, off_t length,
     }
 }
 
-#endif
+#endif /* FUSE_VERSION >= 29 */
 
-static int loopback_setvolname(const char *name)
+static int
+loopback_setvolname(const char *name)
 {
     return 0;
 }
 
-void* loopback_init(struct fuse_conn_info *conn)
+void *
+loopback_init(struct fuse_conn_info *conn)
 {
     FUSE_ENABLE_SETVOLNAME(conn);
     FUSE_ENABLE_XTIMES(conn);
@@ -980,20 +888,20 @@ void* loopback_init(struct fuse_conn_info *conn)
     return NULL;
 }
 
-void loopback_destroy(void *userdata) {}
+void
+loopback_destroy(void *userdata)
+{
+    /* nothing */
+}
 
 static struct fuse_operations loopback_oper = {
         .init        = loopback_init,
         .destroy     = loopback_destroy,
         .getattr     = loopback_getattr,
         .fgetattr    = loopback_fgetattr,
-        .readlink    = loopback_readlink,
-        .opendir     = loopback_opendir,
         .readdir     = loopback_readdir,
-        .releasedir  = loopback_releasedir,
         .mknod       = loopback_mknod,
         .mkdir       = loopback_mkdir,
-        //.symlink     = loopback_symlink,
         .unlink      = loopback_unlink,
         .rmdir       = loopback_rmdir,
         .rename      = loopback_rename,
@@ -1005,6 +913,10 @@ static struct fuse_operations loopback_oper = {
         .statfs      = loopback_statfs,
         .flush       = loopback_flush,
         .release     = loopback_release,
+        //.readlink    = loopback_readlink,
+        //.opendir     = loopback_opendir,
+        //.releasedir  = loopback_releasedir,
+        //.symlink     = loopback_symlink,
         //.fsync       = loopback_fsync,
         //.setxattr    = loopback_setxattr,
         //.getxattr    = loopback_getxattr,
@@ -1041,9 +953,15 @@ static const struct fuse_opt loopback_opts[] = {
 
 void mount_dir(int argc, char *argv[])
 {
+    LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* file = create_logical_file(true, "potato.txt", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+
+    add_logical_file("/", folder);
+    add_logical_file("/Potatoes/", file);
+
     int res;
-    mount_uid = getuid();
-    mount_gid = getgid();
+    mount_gid = 20;
+    mount_uid = 501;
 
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 

@@ -89,16 +89,25 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 int mount(char* path) {
 
+    setgid(20);
+    setuid(501);
+
     // Create a list of char*
-    char** list = malloc(sizeof(char*) * 3);
+    int num = 5;
+    char** list = malloc(sizeof(char*) * num);
+
     char foreground[] = "-f";
+    char options[] = "-o";
+    char volname[] = "volname=Shared\\ Folder";
 
     // First pointer is ignored, Second pointer is the path
     list[0] = list[1] = path;
     list[2] = foreground;
+    list[3] = options;
+    list[4] = volname;
 
     // Call mount
-    mount_dir(3, list);
+    mount_dir(num, list);
     return 0;
 }
 
