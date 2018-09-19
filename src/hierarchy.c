@@ -8,7 +8,9 @@
 
 typedef struct _HierarchyNode {
 
-    int child_count;
+    int file_count;
+    int folder_count;
+
     LogicalFile* file;
     struct _HierarchyNode* child;
     struct _HierarchyNode* sibling;
@@ -16,7 +18,7 @@ typedef struct _HierarchyNode {
 } HierarchyNode;
 
 static LogicalFile root_folder = { .isDir = true, .name = "/", .owner = "", .realpath = "/Users/rcopstein/Desktop/s1" };
-static HierarchyNode root = { .file = &root_folder, .child = NULL, .sibling = NULL, .child_count = 0 };
+static HierarchyNode root = { .file = &root_folder, .child = NULL, .sibling = NULL, .file_count = 0, .folder_count = 0 };
 
 static HierarchyNode* find_node(char* path) {
 
@@ -63,6 +65,8 @@ LogicalFile* create_logical_file(bool isDir, char* name, char* owner, char* real
     result->realpath = (char *) malloc(strlen(realpath) + 1);
     strcpy(result->realpath, realpath);
 
+    result->num_links = 0;
+
     return result;
 
 }
@@ -86,11 +90,18 @@ int add_logical_file(char* path, LogicalFile* file) {
     HierarchyNode* to_add = (HierarchyNode *) malloc(sizeof(HierarchyNode));
     to_add->file = copy_logical_file(file);
     to_add->sibling = add_point->child;
-    to_add->child_count = 0;
+    to_add->folder_count = 0;
+    to_add->file_count = 0;
     to_add->child = NULL;
 
     add_point->child = to_add;
-    add_point->child_count++;
+
+    if (file->isDir) {
+        add_point->file->num_links++;
+        add_point->folder_count++;
+    }
+    else add_point->file_count++;
+
     return 0;
 }
 LogicalFile* get_logical_file(char* path) {
@@ -120,7 +131,13 @@ int rem_logical_file(char* path) {
         if (strcmp(current->file->name, filename) == 0) {
             if (previous != NULL) previous->sibling = current->sibling;
             else parent->child = current->sibling;
-            parent->child_count--;
+
+            if (current->file->isDir) {
+                parent->file->num_links--;
+                parent->folder_count--;
+            }
+            else parent->file_count--;
+
             break;
         }
 
@@ -191,7 +208,7 @@ LogicalFile** list_logical_files(char* path) {
     HierarchyNode* folder = find_node(path);
     if (folder == NULL || !folder->file->isDir) return NULL;
 
-    LogicalFile** list = (LogicalFile **) malloc((folder->child_count + 1) * sizeof(LogicalFile *));
+    LogicalFile** list = (LogicalFile **) malloc((folder->file_count + folder->folder_count + 1) * sizeof(LogicalFile *));
     folder = folder->child;
 
     int count = 0;

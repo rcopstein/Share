@@ -29,6 +29,7 @@
 #include <sys/vnode.h>
 
 #include "mount.h"
+#include "members.h"
 #include "hierarchy.h"
 
 #if defined(_POSIX_C_SOURCE)
@@ -67,17 +68,30 @@ gid_t mount_gid;
 // Functions
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
-    int res;
-
     LogicalFile* file = get_logical_file((char *) path);
-    if (file != NULL) res = lstat(file->realpath, stbuf);
-    else res = lstat(path, stbuf);
+    if (file == NULL)
+        return -ENOENT;
+
+    if (file->isDir) {
+
+        stbuf->st_uid = mount_uid; // The owner of the file/directory is the user who mounted the filesystem
+        stbuf->st_gid = mount_gid; // The group of the file/directory is the same as the group of the user who mounted the filesystem
+        stbuf->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
+        stbuf->st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
+
+        stbuf->st_mode = S_IFDIR | 0755; // The owner of the directory can read and write to it
+        stbuf->st_nlink = (nlink_t)(file->num_links + 2);
+
+    }
+    else {
+
+        if (lstat(file->realpath, stbuf) == -1) return -errno;
 
 #if FUSE_VERSION >= 29
-    stbuf->st_blksize = 0;
+        stbuf->st_blksize = 0;
 #endif
+    }
 
-    if (res == -1) return -errno;
     return 0;
 }
 
@@ -106,15 +120,9 @@ loopback_fgetattr(const char *path, struct stat *stbuf,
 static int
 loopback_readlink(const char *path, char *buf, size_t size)
 {
-    int res;
-
-    res = readlink(path, buf, size - 1);
-    if (res == -1) {
-        return -errno;
-    }
-
+    ssize_t res = readlink(path, buf, size - 1);
+    if (res == -1) return -errno;
     buf[res] = '\0';
-
     return 0;
 }
 
@@ -143,8 +151,7 @@ loopback_opendir(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-static inline struct loopback_dirp *
-get_dirp(struct fuse_file_info *fi)
+static inline struct loopback_dirp *get_dirp(struct fuse_file_info *fi)
 {
     return (struct loopback_dirp *)(uintptr_t)fi->fh;
 }
@@ -231,16 +238,21 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
     return 0;
 }
 
-static int
-loopback_mkdir(const char *path, mode_t mode)
+static int loopback_mkdir(const char *path, mode_t mode)
 {
-    int res;
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    strcpy(_path, path);
 
-    res = mkdir(path, mode);
-    if (res == -1) {
-        return -errno;
-    }
+    char* lastsep = strrchr(_path, '/'); // Find the last occurrence of '/'
+    *lastsep = '\0';
 
+    LogicalFile* lfolder = create_logical_file(true, lastsep + 1, get_current_member()->id, "");
+    int result = add_logical_file(_path, lfolder);
+
+    free_logical_file(lfolder);
+    free(_path);
+
+    if (result) return -ENOENT;
     return 0;
 }
 
@@ -954,7 +966,7 @@ static const struct fuse_opt loopback_opts[] = {
 void mount_dir(int argc, char *argv[])
 {
     LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file = create_logical_file(true, "potato.txt", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* file = create_logical_file(false, "potato.txt", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
     add_logical_file("/", folder);
     add_logical_file("/Potatoes/", file);
