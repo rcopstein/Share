@@ -241,6 +241,93 @@ static int loopback_rename(const char *from, const char *to)
     return result;
 }
 
+static int
+loopback_mknod(const char *path, mode_t mode, dev_t rdev)
+{
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    strcpy(_path, path);
+
+    char* _name = strrchr(_path, '/'); // Find the last occurrence of '/'
+    *_name = '\0';
+    _name++;
+
+    printf("In path '%s'\n", _path);
+    printf("Create file '%s'\n", _name);
+
+    // CHANGE THIS FOR SOMETHING SMARTER
+
+    member* current = get_current_member();
+    char* _npath = (char *) malloc(sizeof(char) * (current->prefix_size + strlen(_name) + 2));
+    sprintf(_npath, "%s/%s", current->prefix, _name);
+
+    printf("The real path is '%s'\n", _npath);
+
+    // END CHANGE
+
+    int res;
+    if (S_ISFIFO(mode)) res = mkfifo(_npath, mode);
+    else res = mknod(_npath, mode, rdev);
+
+    if (res == -1) res = -errno;
+    else {
+        LogicalFile* file = create_logical_file(false, _name, current->id, _npath);
+        if (add_logical_file(_path, file)) {
+            remove(_npath);
+            res = -ENOENT;
+        }
+    }
+
+    printf("The result was %d\n", res);
+
+    free(_npath);
+    free(_path);
+    return res;
+}
+
+static int
+loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    strcpy(_path, path);
+
+    char* _name = strrchr(_path, '/'); // Find the last occurrence of '/'
+    *_name = '\0';
+    _name++;
+
+    printf("In path '%s'\n", _path);
+    printf("Create file '%s'\n", _name);
+
+    // CHANGE THIS FOR SOMETHING SMARTER
+
+    member* current = get_current_member();
+    char* _npath = (char *) malloc(sizeof(char) * (current->prefix_size + current->id_size + strlen(_name) + 3));
+    sprintf(_npath, "%s/%s/%s", current->prefix, current->id, _name);
+
+    printf("The real path is '%s'\n", _npath);
+
+    // END CHANGE
+
+    int res = open(_npath, fi->flags, mode);
+
+    if (res == -1) res = -errno;
+    else {
+        LogicalFile* file = create_logical_file(false, _name, current->id, _npath);
+        if (add_logical_file(_path, file)) {
+            remove(_npath);
+            res = -ENOENT;
+        }
+        else {
+            fi->fh = (uint64_t) res;
+            res = 0;
+        }
+    }
+
+    printf("The result was %d\n", res);
+
+    free(_npath);
+    free(_path);
+    return res;
+}
 
 
 
@@ -310,24 +397,6 @@ loopback_releasedir(const char *path, struct fuse_file_info *fi)
 
     closedir(d->dp);
     free(d);
-
-    return 0;
-}
-
-static int
-loopback_mknod(const char *path, mode_t mode, dev_t rdev)
-{
-    int res;
-
-    if (S_ISFIFO(mode)) {
-        res = mkfifo(path, mode);
-    } else {
-        res = mknod(path, mode, rdev);
-    }
-
-    if (res == -1) {
-        return -errno;
-    }
 
     return 0;
 }
@@ -665,20 +734,6 @@ loopback_getxtimes(const char *path, struct timespec *bkuptime,
         (void)memset(crtime, 0, sizeof(struct timespec));
     }
 
-    return 0;
-}
-
-static int
-loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
-{
-    int fd;
-
-    fd = open(path, fi->flags, mode);
-    if (fd == -1) {
-        return -errno;
-    }
-
-    fi->fh = fd;
     return 0;
 }
 
