@@ -89,8 +89,8 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 int mount(char* path) {
 
-    setgid(20);
-    setuid(501);
+    // setgid(20);
+    // setuid(501);
 
     // Create a list of char*
     int num = 5;
@@ -98,7 +98,7 @@ int mount(char* path) {
 
     char foreground[] = "-f";
     char options[] = "-o";
-    char volname[] = "volname=Shared\\ Folder";
+    char volname[] = "volname=Shared\\ Folder,uid=501,gid=20";
 
     // First pointer is ignored, Second pointer is the path
     list[0] = list[1] = path;
@@ -108,6 +108,7 @@ int mount(char* path) {
 
     // Call mount
     mount_dir(num, list);
+
     return 0;
 }
 
@@ -146,7 +147,6 @@ int create(char* ip, uint16_t port) {
     // REMOVE THIS LATER
     //add_nfs_recp(get_current_member(), "111.111.111.111");
 
-    mount("/Users/rcopstein/Desktop/s3");
     stop_wait_all_background();
     //server_wait();
 
@@ -257,7 +257,27 @@ int main(int argc, char** argv) {
     // Read command
     char* command = argv[1];
 
-    if (strcmp(command, "create") == 0) return parse_create(argc - 2, argv + 2);
-    else if (strcmp(command, "join") == 0) return parse_join(argc - 2, argv + 2);
+    if (strcmp(command, "create") == 0) {
+
+        pid_t child = fork();
+        if (child == -1) return error("Failed to initialize child process!\n", NULL);
+
+        if (child == 0) mount("/Users/rcopstein/Desktop/s3");
+        else parse_create(argc - 2, argv + 2);
+
+        if (child != 0) waitpid(child, NULL, 0);
+
+    }
+    else if (strcmp(command, "join") == 0) {
+
+        pid_t child = fork();
+        if (child == -1) return error("Failed to initialize child process!\n", NULL);
+
+        if (child == 0) {} // This is where you would mount
+        else parse_join(argc - 2, argv + 2);
+
+        if (child != 0) waitpid(child, NULL, 0);
+
+    }
     else return error("Unknown command '%s'\n", command);
 }

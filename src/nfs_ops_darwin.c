@@ -8,7 +8,6 @@
 #include "output.h"
 #include "nfs_ops.h"
 #include "members.h"
-#include "shared_memory.h"
 
 static const char definitionOptions[] = "-fspath=/";
 static const char       exportsFile[] = "/etc/exports";
@@ -66,13 +65,7 @@ int add_nfs_recp(member* m, char* recipient) {
     _path = build_nfs_path(m, &size);
     _ip = recipient;
 
-    if (lock_exports_file()) return error("Failed to lock exports file!\n", NULL);
-    if (fops_update_line(exportsFile, _path, _add_nfs_recp)) {
-        unlock_exports_file();
-        return error("Failed to update line!\n", NULL);
-    }
-
-    unlock_exports_file();
+    if (fops_update_line(exportsFile, _path, _add_nfs_recp)) return error("Failed to update line!\n", NULL);
     return update_nfs();
 }
 
@@ -110,14 +103,11 @@ static char* _remove_nfs_recp(char* line) {
 }
 int remove_nfs_recp(member* m, char* recipient) {
 
-    if (lock_exports_file()) { return error("Failed to lock exports file!\n", NULL); }
-
     size_t size;
     char* path = build_nfs_path(m, &size);
     _recp = recipient;
 
     int result = fops_update_line(exportsFile, path, _remove_nfs_recp);
-    unlock_exports_file();
     free(path);
 
     if (result) return error("Failed to update line!\n", NULL);

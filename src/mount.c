@@ -294,16 +294,11 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     *_name = '\0';
     _name++;
 
-    printf("In path '%s'\n", _path);
-    printf("Create file '%s'\n", _name);
-
     // CHANGE THIS FOR SOMETHING SMARTER
 
     member* current = get_current_member();
     char* _npath = (char *) malloc(sizeof(char) * (current->prefix_size + current->id_size + strlen(_name) + 3));
     sprintf(_npath, "%s/%s/%s", current->prefix, current->id, _name);
-
-    printf("The real path is '%s'\n", _npath);
 
     // END CHANGE
 
@@ -1039,7 +1034,6 @@ void mount_dir(int argc, char *argv[])
     add_logical_file("/", folder);
     add_logical_file("/Potatoes/", file);
 
-    int res;
     mount_gid = 20;
     mount_uid = 501;
 
@@ -1049,6 +1043,6 @@ void mount_dir(int argc, char *argv[])
     if (fuse_opt_parse(&args, &loopback, loopback_opts, NULL) == -1) exit(1);
     umask(0);
 
-    res = fuse_main(args.argc, args.argv, &loopback_oper, NULL);
+    fuse_main(args.argc, args.argv, &loopback_oper, NULL);
     fuse_opt_free_args(&args);
 }

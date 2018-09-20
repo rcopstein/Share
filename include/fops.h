@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory.h>
+
 int fops_make_dir(const char* dirname);
 
 int fops_remove_dir(const char* dirname);

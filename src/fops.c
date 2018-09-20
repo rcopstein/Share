@@ -15,9 +15,7 @@
 static bool matches(const char *pre, const char *str) {
 
     size_t lenpre = strlen(pre);
-    size_t lenstr = strlen(str);
-
-    if (lenstr < lenpre || strncmp(pre, str, lenpre) != 0) return false;
+    if (strncmp(pre, str, lenpre) != 0) return false;
 
     if (str[lenpre] == ' '  ||
         str[lenpre] == '\n' ||
@@ -25,6 +23,30 @@ static bool matches(const char *pre, const char *str) {
 
     return false;
 }
+
+static int lock_file(int file, short type) {
+
+    struct flock lock = {
+            .l_len = 0,
+            .l_start = 0,
+            .l_type = type,
+            .l_pid = getpid(),
+            .l_whence = SEEK_SET,
+    };
+
+    return fcntl(file, F_SETLKW, &lock);
+}
+
+//
+// File locking with fcntl is not supported with stdio operations
+// With that said, I believe that porting all functions to open/read/write
+// is the best strategy
+//
+// According to other sources, if I don't explicitly unlock the file after using fclose(),
+// then fcntl() will release the lock after the content has been actually written to disk.
+// The source for fcntl() actually just say that buffering with stdio functions will cause
+// some trouble, but this second strategy should work around that.
+//
 
 // Methods
 
@@ -44,18 +66,20 @@ int fops_remove_dir(const char* dirname) {
 
 int fops_append_line(const char* filename, const char* line) {
 
-    FILE* file = fopen(filename, "a");
-    if (file == NULL) return error("File '%s' not found!\n", (char *) filename);
+    int file = open(filename, O_APPEND);
+    if (file < 0) return error("File '%s' not found!\n", (char *) filename);
 
-    int lock = flock(fileno(file), LOCK_EX);
-    if (lock) { fclose(file); return error("Failed to lock file!\n", NULL); }
+    int result = 0;
+    int ack_lock = lock_file(file, F_WRLCK);
 
-    fwrite(line, sizeof(char), strlen(line), file);
-    fclose(file);
+    if (ack_lock > 0) write(file, line, sizeof(char) * strlen(line));
+    else result = error("Failed to acquire file lock!\n", NULL);
 
-    flock(fileno(file), LOCK_UN);
+    close(file);
+    return result;
 
-    return 0;
+    // There is no call for unlocking on purpose. fcntl should release the lock automatically
+    // after the call for close.
 }
 
 int fops_read_line(const char* filename, const char* prefix, char* buffer, size_t size) {
@@ -63,22 +87,38 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
     FILE* file = fopen(filename, "r");
     if (file == NULL) return error("Failed to open file '%s'!\n", (char *) filename);
 
-    while (getline(&buffer, &size, file))
-        if (matches(prefix, buffer))
-            return 0;
+    int result = 1;
+    int ack_lock = lock_file(fileno(file), F_RDLCK);
 
-    return 1;
+    if (ack_lock > 0) {
+        while (getline(&buffer, &size, file)) {
+            if (matches(prefix, buffer)) {
+                result = 0;
+                break;
+            }
+        }
 
+    } else result = error("Failed to acquire lock!\n", NULL);
+
+    fclose(file);
+    return result;
+
+    // There is no call for unlocking on purpose. fcntl should release the lock automatically
+    // after the call for fclose.
 }
 
 int fops_update_line(const char* filename, const char* prefix, char* (*funct)(char *)) {
 
+    printf(">> I'm currently %d\n", getuid());
+
     FILE* file = fopen(filename, "r+");
-    if (file == NULL) return error("Failed to open file '%s'!\n", (char *) filename);
+    if (file == NULL) { printf("Error is %d\n", errno); return error("Failed to open file '%s'!\n", (char *) filename); }
+    if (lock_file(fileno(file), F_WRLCK) < 0) return error("Failed to acquire lock for '%s'!\n", (char *) filename);
 
     char* tempPath = "temp";
     FILE* tempFile = fopen(tempPath, "w+");
     if (tempFile == NULL) { fclose(file); return error("Failed to create a temporary file!\n", NULL); }
+    if (lock_file(fileno(tempFile), F_WRLCK) < 0) { fclose(file); return error("Failed to acquire lock for temp file!\n", NULL); }
 
     bool flag;
     char* line;
@@ -120,15 +160,14 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
         remove(tempPath);
     }
 
-    fflush(tempFile);
-    fflush(file);
-
     fclose(tempFile);
     fclose(file);
     free(buffer);
 
     return result;
 
+    // There is no call for unlocking on purpose. fcntl should release the lock automatically
+    // after the call for fclose.
 }
 
 int fops_remove_line(const char* filename, const char* prefix) {
