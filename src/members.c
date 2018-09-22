@@ -61,14 +61,13 @@ static member* copy_member(member* m) {
     member* result = (member *) malloc(sizeof(member));
     memcpy(result, m, sizeof(member));
 
-    result->id = (char *) malloc(result->id_size);
-    result->prefix = (char *) malloc(result->prefix_size);
+    result->id = (char *) malloc(result->id_size + 1);
+    result->prefix = (char *) malloc(result->prefix_size + 1);
 
     strncpy(result->id, m->id, result->id_size);
     strncpy(result->prefix, m->prefix, result->prefix_size);
 
     return result;
-
 }
 
 int initialize_metadata_members(member *m) {
@@ -136,7 +135,6 @@ char* generate_member_id() {
     sprintf(id, "%s-%d", current->id, child_count);
 
     return id;
-
 }
 
 void remove_member(char* id) {
@@ -280,8 +278,6 @@ int deserialize_member(char *input, member *container) {
     memcpy(&size, aux, sizeof(uint16_t)); // Read the prefix size
     container->prefix_size = size;
     aux += sizeof(uint16_t);
-
-    printf("\n### Read Prefix size when deserializing member: %d\n\n", size);
 
     container->prefix = (char *) malloc(size + 1); // Read the prefix
     strncpy(container->prefix, aux, size);

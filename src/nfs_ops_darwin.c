@@ -20,6 +20,9 @@ static char* build_nfs_path(member* m, size_t *size) {
     *size = m->prefix_size + m->id_size + 2;
     char* path = (char *) malloc(*size);
 
+    printf("The Prefix is: %s\n", m->prefix);
+    printf("The ID is: %s\n", m->id);
+
     sprintf(path, "%s/%s", m->prefix, m->id);
     return path;
 }

@@ -45,8 +45,7 @@ int usage() {
 // Handle SIGINT
 static void on_interrupt(int signal) {
 
-    server_stop();
-    stop_wait_all_background();
+    unmount_dir();
 
 }
 
@@ -87,43 +86,35 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 // Mount
 
-int mount(char* path) {
+void add_sample_mount_info() {
 
-    // setgid(20);
-    // setuid(501);
+    LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* file = create_logical_file(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
-    // Create a list of char*
-    int num = 5;
-    char** list = malloc(sizeof(char*) * num);
-
-    char foreground[] = "-f";
-    char options[] = "-o";
-    char volname[] = "volname=Shared\\ Folder,uid=501,gid=20";
-
-    // First pointer is ignored, Second pointer is the path
-    list[0] = list[1] = path;
-    list[2] = foreground;
-    list[3] = options;
-    list[4] = volname;
-
-    // Call mount
-    mount_dir(num, list);
-
-    return 0;
+    add_logical_file("/", folder);
+    add_logical_file("/Potatoes/", file);
 }
 
 
 // Create
 
-int clean_create() {
+int clean_create(int level, char* nfs) {
 
-    server_stop();
-    remove_metadata_members();
-    fops_remove_dir(METADATA_DIR);
+    switch (level) {
+        case 1:
+            fops_remove_dir(nfs);
+        case 0:
+            server_stop();
+            remove_metadata_members();
+            fops_remove_dir(METADATA_DIR);
+            break;
+        default:
+            break;
+    }
 
     return 1;
 }
-int create(char* ip, uint16_t port) {
+int create(char* ip, uint16_t port, char* mountpoint) {
 
     // TO-DO: Allow user to specify owner of the files
 
@@ -138,17 +129,19 @@ int create(char* ip, uint16_t port) {
     if (initialize(id, ip, port)) return 1;
 
     // Create the NFS directory
-    if (fops_make_dir(nfs)) return clean_create();
+    if (fops_make_dir(nfs)) return clean_create(0, nfs);
+
+    // Mount Filesystem
+    if (mount_dir(mountpoint)) return clean_create(1, nfs);
+    add_sample_mount_info();
 
     // Retake super user privileges
     setegid(0);
     seteuid(0);
 
-    // REMOVE THIS LATER
-    //add_nfs_recp(get_current_member(), "111.111.111.111");
-
+    // Wait for filesystem to finish operating
+    mount_loop();
     stop_wait_all_background();
-    //server_wait();
 
     return 0;
 }
@@ -158,41 +151,66 @@ int parse_create(int argc, char** argv) {
     char ip[16] = "\0";
     uint16_t port = 4000;
 
+    char* mountpoint = NULL;
+
     // Read arguments
     for (uint8_t i = 0; i < argc; ++i) {
 
+        // Read IP First
+
         if (ip[0] == 0) {
 
-            char* token = strtok(argv[i], ":");
+            char *token = strtok(argv[i], ":");
             strncpy(ip, token, 15);
 
             token = strtok(NULL, ":");
             if (token != NULL) port = (uint16_t) strtol(token, NULL, 10);
 
-        } else
+        }
+
+        // Read Mount Point Then
+
+        else if (mountpoint == NULL) {
+
+            mountpoint = (char *) malloc(sizeof(char) * (strlen(argv[i]) + 1));
+            strcpy(mountpoint, argv[i]);
+
+        }
+
+        // Fail for unknown arguments
+
+        else {
+            free(mountpoint);
             return error("Unknown parameter '%s'\n", argv[i]);
+        }
     }
 
     // Check required arguments
-    if (ip[0] == 0) return usage();
+    if (ip[0] == 0 || mountpoint == NULL) return usage();
 
     // Call Create
-    return create(ip, port);
+    return create(ip, port, mountpoint);
 }
 
 
 // Join
 
-int clean_join() {
+int clean_join(int level) {
 
-    server_stop();
-    remove_metadata_members();
-    fops_remove_dir(METADATA_DIR);
+    switch (level) {
+        case 1:
+            unmount_dir();
+        case 0:
+            server_stop();
+            remove_metadata_members();
+            fops_remove_dir(METADATA_DIR);
+        default:
+            break;
+    }
 
     return 1;
-
 }
-int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client_port) {
+int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client_port, char* mountpoint) {
 
     // Lower privileges to create files
     setegid(20);
@@ -201,15 +219,20 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     // Initialize Metadata
     if (initialize("", client_ip, client_port)) return 1;
 
+    // Mount Filesystem
+    if (mount_dir(mountpoint)) return clean_join(0);
+    add_sample_mount_info();
+
     // Retake super user privileges
     setegid(0);
     seteuid(0);
 
     // Send Join Request
-    if (send_name_req(server_ip, server_port, get_current_member())) return clean_join();
+    if (send_name_req(server_ip, server_port, get_current_member())) return clean_join(1);
 
-    // Wait for server to complete
-    server_wait();
+    // Wait for filesystem to finish operating
+    mount_loop();
+    stop_wait_all_background();
 
     return 0;
 
@@ -236,9 +259,13 @@ int parse_join(int argc, char** argv) {
     tok = strtok(NULL, ":");
     if (tok != NULL) client_port = (uint16_t) strtol(tok, NULL, 10);
 
+    // Read Mount Point
+    char* mountpoint = (char *) malloc(sizeof(char) * (strlen(argv[2]) + 1));
+    strcpy(mountpoint, argv[2]);
+
     // Check required arguments
     if (server[0] == '\0' || client[0] == '\0') return error("Failed to parse ips\n", NULL);
-    return join(server, server_port, client, client_port);
+    return join(server, server_port, client, client_port, mountpoint);
 }
 
 
@@ -252,32 +279,12 @@ int main(int argc, char** argv) {
     if (argc < 2) return usage();
 
     // Register Interruption Handler
-    //signal(SIGINT, on_interrupt);
+    signal(SIGINT, on_interrupt);
 
     // Read command
     char* command = argv[1];
 
-    if (strcmp(command, "create") == 0) {
-
-        pid_t child = fork();
-        if (child == -1) return error("Failed to initialize child process!\n", NULL);
-
-        if (child == 0) mount("/Users/rcopstein/Desktop/s3");
-        else parse_create(argc - 2, argv + 2);
-
-        if (child != 0) waitpid(child, NULL, 0);
-
-    }
-    else if (strcmp(command, "join") == 0) {
-
-        pid_t child = fork();
-        if (child == -1) return error("Failed to initialize child process!\n", NULL);
-
-        if (child == 0) {} // This is where you would mount
-        else parse_join(argc - 2, argv + 2);
-
-        if (child != 0) waitpid(child, NULL, 0);
-
-    }
+    if (strcmp(command, "create") == 0) parse_create(argc - 2, argv + 2);
+    else if (strcmp(command, "join") == 0) parse_join(argc - 2, argv + 2);
     else return error("Unknown command '%s'\n", command);
 }

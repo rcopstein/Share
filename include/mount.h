@@ -1,3 +1,5 @@
 #pragma once
 
-void mount_dir(int argc, char** argv);
+int mount_dir(char* mountpoint);
+int unmount_dir();
+int mount_loop();

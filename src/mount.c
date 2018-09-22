@@ -27,10 +27,12 @@
 #include <sys/attr.h>
 #include <sys/param.h>
 #include <sys/vnode.h>
+#include <pthread.h>
 
 #include "mount.h"
 #include "members.h"
 #include "hierarchy.h"
+#include "output.h"
 
 #if defined(_POSIX_C_SOURCE)
 typedef unsigned char  u_char;
@@ -1015,34 +1017,66 @@ static struct fuse_operations loopback_oper = {
         .flag_nullpath_ok = 1,
         .flag_nopath = 1,
 #else
-.flag_nullpath_ok = 0,
-            .flag_nopath = 0,
+        .flag_nullpath_ok = 0,
+        .flag_nopath = 0,
 #endif
 #endif
 };
 
-static const struct fuse_opt loopback_opts[] = {
-        { "case_insensitive", offsetof(struct loopback, case_insensitive), 1 },
-        FUSE_OPT_END
-};
+// FUSE Session Management
 
-void mount_dir(int argc, char *argv[])
-{
-    LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file = create_logical_file(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+static struct fuse* filesystem = NULL;
+static pthread_t loop_thread = 0;
+static char* mountpoint = NULL;
 
-    add_logical_file("/", folder);
-    add_logical_file("/Potatoes/", file);
+int mount_dir(char* mp) {
 
-    mount_gid = 20;
-    mount_uid = 501;
+    mount_gid = getegid();
+    mount_uid = geteuid();
 
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    mountpoint = (char *) malloc(sizeof(char) * (strlen(mp) + 1));
+    strcpy(mountpoint, mp);
 
-    loopback.case_insensitive = 0;
-    if (fuse_opt_parse(&args, &loopback, loopback_opts, NULL) == -1) exit(1);
-    umask(0);
+    // Create Parameters
+    int num = 5;
+    char** list = malloc(sizeof(char*) * num);
 
-    fuse_main(args.argc, args.argv, &loopback_oper, NULL);
-    fuse_opt_free_args(&args);
+    char foreground[] = "-f";
+    char options[]    = "-o";
+    char volname[]    = "volname=Shared\\ Folder,allow_other";
+
+    // First pointer is ignored, Second pointer is the path
+    list[0] = mountpoint;
+    list[1] = mountpoint;
+    list[2] = foreground;
+    list[3] = options;
+    list[4] = volname;
+
+    // Attempt to initialize FUSE
+
+    int mt;
+    char* res_dir = NULL;
+    filesystem = fuse_setup(num, list, &loopback_oper, sizeof(loopback_oper), &res_dir, &mt, NULL);
+
+    return filesystem == NULL ? 1 : 0;
+}
+int unmount_dir() {
+    if (filesystem == NULL) return error("Failed to retrieve FUSE struct!\n", NULL);
+    fuse_teardown(filesystem, mountpoint);
+    free(filesystem);
+    free(mountpoint);
+    return 0;
+}
+
+static void* _mount_loop() {
+    if (filesystem == NULL) { error("Failed to retrieve FUSE struct!\n", NULL); return NULL; }
+    fuse_loop(filesystem);
+    return NULL;
+}
+int mount_loop() {
+
+    pthread_create(&loop_thread, NULL, _mount_loop, NULL);
+    pthread_join(loop_thread, NULL);
+    return 0;
+
 }
