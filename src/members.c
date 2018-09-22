@@ -64,8 +64,8 @@ static member* copy_member(member* m) {
     result->id = (char *) malloc(result->id_size + 1);
     result->prefix = (char *) malloc(result->prefix_size + 1);
 
-    strncpy(result->id, m->id, result->id_size);
-    strncpy(result->prefix, m->prefix, result->prefix_size);
+    strncpy(result->id, m->id, result->id_size + 1);
+    strncpy(result->prefix, m->prefix, result->prefix_size + 1);
 
     return result;
 }
