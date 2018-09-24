@@ -42,13 +42,6 @@ int usage() {
     return 1;
 }
 
-// Handle SIGINT
-static void on_interrupt(int signal) {
-
-    unmount_dir();
-
-}
-
 // Initialize
 
 int initialize(char* id, char* ip, uint16_t port) {
@@ -88,11 +81,19 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 void add_sample_mount_info() {
 
-    LogicalFile* folder = create_logical_file(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file = create_logical_file(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* folder = create_lf(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* file1  = create_lf(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* file2  = create_lf(false, "potato.xlsx", "1-1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
-    add_logical_file("/", folder);
-    add_logical_file("/Potatoes/", file);
+    add_lf(folder, "/");
+    add_lf(file1, "/Potatoes/");
+    add_lf(file2, "/Potatoes/");
+
+    //rem_lf("/Potatoes/potato.xlsx@1");
+
+    free_lf(folder);
+    free_lf(file1);
+    free_lf(file2);
 }
 
 
@@ -273,13 +274,8 @@ int parse_join(int argc, char** argv) {
 
 int main(int argc, char** argv) {
 
-    //sem_unlink("etc_exports_mutex");
-
     // Check for minimum number of arguments
     if (argc < 2) return usage();
-
-    // Register Interruption Handler
-    signal(SIGINT, on_interrupt);
 
     // Read command
     char* command = argv[1];

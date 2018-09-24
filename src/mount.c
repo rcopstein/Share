@@ -70,9 +70,8 @@ gid_t mount_gid;
 // Functions
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
-    LogicalFile* file = get_logical_file((char *) path);
-    if (file == NULL)
-        return -ENOENT;
+    LogicalFile* file = get_lf((char *) path);
+    if (file == NULL) return -ENOENT;
 
     if (file->isDir) {
 
@@ -104,7 +103,8 @@ static inline struct loopback_dirp *get_dirp(struct fuse_file_info *fi)
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    LogicalFile** list = list_logical_files((char *) path);
+    int* conflicts;
+    LogicalFile** list = list_lf((char *) path, &conflicts);
     if (list == NULL) return -ENOENT;
 
     filler(buf, ".", NULL, 0);
@@ -113,7 +113,25 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     int count = 0;
     LogicalFile* aux;
 
-    while ((aux = list[count++]) != NULL) filler(buf, aux->name, NULL, 0);
+    while ((aux = list[count]) != NULL) {
+
+        if (conflicts[count]) {
+
+            char* name = resolved_name(aux);
+            filler(buf, name, NULL, 0);
+            free(name);
+
+        } else {
+
+            filler(buf, aux->name, NULL, 0);
+
+        }
+        ++count;
+    }
+
+    free(conflicts);
+    free(list);
+
     return 0;
 
     struct loopback_dirp *d = get_dirp(fi);
@@ -161,10 +179,10 @@ static int loopback_mkdir(const char *path, mode_t mode)
     char* lastsep = strrchr(_path, '/'); // Find the last occurrence of '/'
     *lastsep = '\0';
 
-    LogicalFile* lfolder = create_logical_file(true, lastsep + 1, get_current_member()->id, "");
-    int result = add_logical_file(_path, lfolder);
+    LogicalFile* lfolder = create_lf(true, lastsep + 1, get_current_member()->id, "");
+    int result = add_lf(lfolder, _path);
 
-    free_logical_file(lfolder);
+    free_lf(lfolder);
     free(_path);
 
     if (result) return -ENOENT;
@@ -173,12 +191,12 @@ static int loopback_mkdir(const char *path, mode_t mode)
 
 static int loopback_rmdir(const char *path)
 {
-    return rem_logical_file((char *) path);
+    return rem_lf((char *) path);
 }
 
 static int loopback_open(const char *path, struct fuse_file_info *fi)
 {
-    LogicalFile* file = get_logical_file((char *) path);
+    LogicalFile* file = get_lf((char *) path);
     if (file == NULL) return -ENOENT;
 
     int fd = open(file->realpath, fi->flags);
@@ -212,30 +230,14 @@ static int loopback_rename(const char *from, const char *to)
     char* _to_path = (char *) malloc(strlen(to) + 1); // Copy path to we don't mess with params
     strcpy(_to_path, to);
 
-    char* _from_name = strrchr(_from_path, '/'); // Find the last occurrence of '/'
-    *_from_name = '\0';
-    _from_name++;
-
-    char* _to_name = strrchr(_to_path, '/'); // Find the last occurrence of '/'
-    *_to_name = '\0';
-    _to_name++;
+    char* _to_name;
+    split_path(_to_path, &_to_name);
 
     int result;
-    printf("Renamed paths %s %s\n", _from_path, _to_path);
-    printf("From name %s to %s\n", _from_name, _to_name);
+    printf("Renamed from %s to %s/%s\n", _from_path, _to_path, _to_name);
 
-    if (strcmp(_to_path, _from_path) == 0) {
-
-        LogicalFile* file = get_logical_file((char *) from);
-        if (file == NULL) result = -ENOENT;
-        else {
-            free(file->name);
-            file->name = (char *) malloc(sizeof(char) * (strlen(_to_name) + 1));
-            strcpy(file->name, _to_name);
-            result = 0;
-        }
-
-    } else result = -EPERM;
+    if (strcmp(_to_path, _from_path) == 0) result = ren_lf(_from_path, _to_name);
+    else result = -EPERM;
 
     free(_from_path);
     free(_to_path);
@@ -249,9 +251,8 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
     strcpy(_path, path);
 
-    char* _name = strrchr(_path, '/'); // Find the last occurrence of '/'
-    *_name = '\0';
-    _name++;
+    char* _name;
+    split_path(_path, &_name);
 
     printf("In path '%s'\n", _path);
     printf("Create file '%s'\n", _name);
@@ -272,11 +273,8 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
 
     if (res == -1) res = -errno;
     else {
-        LogicalFile* file = create_logical_file(false, _name, current->id, _npath);
-        if (add_logical_file(_path, file)) {
-            remove(_npath);
-            res = -ENOENT;
-        }
+        LogicalFile* file = create_lf(false, _name, current->id, _npath);
+        if ((res = add_lf(file, _path))) remove(_npath);
     }
 
     printf("The result was %d\n", res);
@@ -292,9 +290,11 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
     strcpy(_path, path);
 
-    char* _name = strrchr(_path, '/'); // Find the last occurrence of '/'
-    *_name = '\0';
-    _name++;
+    char* _name;
+    split_path(_path, &_name);
+
+    printf("In path '%s'\n", _path);
+    printf("Create file '%s'\n", _name);
 
     // CHANGE THIS FOR SOMETHING SMARTER
 
@@ -308,15 +308,8 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 
     if (res == -1) res = -errno;
     else {
-        LogicalFile* file = create_logical_file(false, _name, current->id, _npath);
-        if (add_logical_file(_path, file)) {
-            remove(_npath);
-            res = -ENOENT;
-        }
-        else {
-            fi->fh = (uint64_t) res;
-            res = 0;
-        }
+        LogicalFile* file = create_lf(false, _name, current->id, _npath);
+        if ((res = add_lf(file, _path))) remove(_npath);
     }
 
     printf("The result was %d\n", res);
@@ -1063,7 +1056,6 @@ int mount_dir(char* mp) {
 int unmount_dir() {
     if (filesystem == NULL) return error("Failed to retrieve FUSE struct!\n", NULL);
     fuse_teardown(filesystem, mountpoint);
-    free(filesystem);
     free(mountpoint);
     return 0;
 }
