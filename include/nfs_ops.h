@@ -15,3 +15,6 @@ int remove_nfs_recp(member* m, char* recipient);
 // Mount/Unmount an NFS view
 int mount_nfs_dir(member* m);
 int unmount_nfs_dir(member* m);
+
+// Set user permissions
+void set_root_perm(uid_t uid);

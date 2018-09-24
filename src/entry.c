@@ -19,10 +19,54 @@
 #include "server.h"
 #include "protocol_name.h"
 #include "background.h"
+#include "system.h"
 
 const char METADATA_DIR[] = "metadata/";
 const char METADATA_HIERARCHY[] = "metadata/logical_hierarchy.txt";
 
+// Auxiliary
+
+uid_t read_uid(char* param) {
+
+    char* comm = (char *) malloc(sizeof(char) * (strlen(param) + 7));
+    sprintf(comm, "id -u %s", param);
+
+    FILE* result = popen(comm, "r");
+    fgets(comm, (int)(strlen(param) + 6), result);
+
+    char* end;
+    long uid = strtol(comm, &end, 10);
+
+    if (end == comm) return (uid_t) -1;
+    return (uid_t) uid;
+}
+gid_t read_gid(char* param) {
+
+    char* comm = (char *) malloc(sizeof(char) * (strlen(param) + 7));
+    sprintf(comm, "id -g %s", param);
+
+    FILE* result = popen(comm, "r");
+    fgets(comm, (int)(strlen(param) + 6), result);
+
+    char* end;
+    long gid = strtol(comm, &end, 10);
+
+    if (end == comm) return (gid_t) -1;
+    return (gid_t) gid;
+}
+int confirm_root() {
+
+    warning("You are creating/joining this share as a super user. \n"
+            "This means the filesystem will only be available "
+            "to users with super user capabilities. \n"
+            "Would you like to continue? (Y/n) \n\n> ", NULL);
+
+    char res[256];
+    scanf("%s", res);
+    printf("\n");
+
+    return strlen(res) == 0 || res[0] == 'y' || res[0] == 'Y' ? 0 : 1;
+}
 int usage() {
 
     printf("Usage:\n\n");
@@ -41,6 +85,7 @@ int usage() {
 
     return 1;
 }
+
 
 // Initialize
 
@@ -123,8 +168,7 @@ int create(char* ip, uint16_t port, char* mountpoint) {
     char nfs[] = "1/";
 
     // Lower privileges to create files
-    setegid(20);
-    seteuid(501);
+    become_user();
 
     // Initialize Metadata
     if (initialize(id, ip, port)) return 1;
@@ -137,8 +181,7 @@ int create(char* ip, uint16_t port, char* mountpoint) {
     add_sample_mount_info();
 
     // Retake super user privileges
-    setegid(0);
-    seteuid(0);
+    become_root();
 
     // Wait for filesystem to finish operating
     mount_loop();
@@ -149,6 +192,8 @@ int create(char* ip, uint16_t port, char* mountpoint) {
 int parse_create(int argc, char** argv) {
 
     // Declare arguments
+    uid_t uid = 0;
+    gid_t gid = 0;
     char ip[16] = "\0";
     uint16_t port = 4000;
 
@@ -157,9 +202,20 @@ int parse_create(int argc, char** argv) {
     // Read arguments
     for (uint8_t i = 0; i < argc; ++i) {
 
+        if (argv[i][0] == '-') {
+
+            // It's a flag
+            if (argv[i][1] == 'u') {
+                if (++i >= argc) return error("Expected flag value!\n", NULL);
+                uid = read_uid(argv[i]);
+                gid = read_gid(argv[i]);
+            }
+
+        }
+
         // Read IP First
 
-        if (ip[0] == 0) {
+        else if (ip[0] == 0) {
 
             char *token = strtok(argv[i], ":");
             strncpy(ip, token, 15);
@@ -188,6 +244,14 @@ int parse_create(int argc, char** argv) {
 
     // Check required arguments
     if (ip[0] == 0 || mountpoint == NULL) return usage();
+    if (uid < 0) return error("User not found!\n", NULL);
+
+    // Update System Info
+    set_uid(uid);
+    set_gid(gid);
+    set_root_perm(uid);
+    if (uid == 0 && confirm_root()) return 1;
+    printf("UID: %d GID: %d\n", uid, gid);
 
     // Call Create
     return create(ip, port, mountpoint);
@@ -214,8 +278,7 @@ int clean_join(int level) {
 int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client_port, char* mountpoint) {
 
     // Lower privileges to create files
-    setegid(20);
-    seteuid(501);
+    become_user();
 
     // Initialize Metadata
     if (initialize("", client_ip, client_port)) return 1;
@@ -225,8 +288,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     add_sample_mount_info();
 
     // Retake super user privileges
-    setegid(0);
-    seteuid(0);
+    become_root();
 
     // Send Join Request
     if (send_name_req(server_ip, server_port, get_current_member())) return clean_join(1);
@@ -241,31 +303,85 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
 int parse_join(int argc, char** argv) {
 
     // Declare arguments
+    uid_t uid = 0;
+    gid_t gid = 0;
     char server[16] = "\0";
     char client[16] = "\0";
+    char* mountpoint = NULL;
     uint16_t server_port = 4000;
     uint16_t client_port = 4000;
 
-    // Read server address
-    char* tok = strtok(argv[0], ":");
-    strncpy(server, tok, 15);
+    // Read arguments
+    for (uint8_t i = 0; i < argc; ++i) {
 
-    tok = strtok(NULL, ":");
-    if (tok != NULL) server_port = (uint16_t) strtol(tok, NULL, 10);
+        if (argv[i][0] == '-') {
 
-    // Read client address
-    tok = strtok(argv[1], ":");
-    strncpy(client, tok, 15);
+            // It's a flag
+            if (argv[i][1] == 'u') {
+                if (++i >= argc) return error("Expected flag value!\n", NULL);
+                uid = read_uid(argv[i]);
+                gid = read_gid(argv[i]);
+            }
 
-    tok = strtok(NULL, ":");
-    if (tok != NULL) client_port = (uint16_t) strtol(tok, NULL, 10);
+        }
 
-    // Read Mount Point
-    char* mountpoint = (char *) malloc(sizeof(char) * (strlen(argv[2]) + 1));
-    strcpy(mountpoint, argv[2]);
+        // Read Server Address
+
+        else if (server[0] == 0) {
+
+            // Read server address
+            char* tok = strtok(argv[0], ":");
+            strncpy(server, tok, 15);
+
+            tok = strtok(NULL, ":");
+            if (tok != NULL) server_port = (uint16_t) strtol(tok, NULL, 10);
+
+        }
+
+        // Read Client Address
+
+        else if (client[0] == 0) {
+
+            char* tok = strtok(argv[1], ":");
+            strncpy(client, tok, 15);
+
+            tok = strtok(NULL, ":");
+            if (tok != NULL) client_port = (uint16_t) strtol(tok, NULL, 10);
+
+        }
+
+        // Read Mount Point Then
+
+        else if (mountpoint == NULL) {
+
+            mountpoint = (char *) malloc(sizeof(char) * (strlen(argv[2]) + 1));
+            strcpy(mountpoint, argv[2]);
+
+        }
+
+        // Fail for unknown arguments
+
+        else {
+            free(mountpoint);
+            return error("Unknown parameter '%s'\n", argv[i]);
+        }
+    }
 
     // Check required arguments
-    if (server[0] == '\0' || client[0] == '\0') return error("Failed to parse ips\n", NULL);
+    if (server[0] == '\0' || client[0] == '\0' || mountpoint == NULL) {
+        free(mountpoint);
+        return usage();
+    }
+    if (uid < 0) { free(mountpoint); return error("User not found!\n", NULL); }
+
+    // Set System Info
+    set_uid(uid);
+    set_gid(gid);
+    set_root_perm(uid);
+    if (uid == 0 && confirm_root()) { free(mountpoint); return 1; }
+    printf("UID: %d GID: %d\n", uid, gid);
+
+    // Call Join
     return join(server, server_port, client, client_port, mountpoint);
 }
 

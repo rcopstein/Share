@@ -14,6 +14,8 @@ static const char       exportsFile[] = "/etc/exports";
 static const char        unmountCmd[] = "sudo umount %s:%s";
 static const char          mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
 
+static char* root_perm = NULL;
+
 // Build NFS Path for member
 static char* build_nfs_path(member* m, size_t *size) {
 
@@ -46,8 +48,8 @@ static char* _add_nfs_recp(char* line) {
     char* preline = NULL;
 
     if (line == NULL) {
-        preline = (char *) malloc(strlen(_path) + strlen(definitionOptions) + 2);
-        sprintf(preline, "%s %s", _path, definitionOptions);
+        preline = (char *) malloc(strlen(_path) + strlen(definitionOptions) + strlen(root_perm) + 3);
+        sprintf(preline, "%s %s %s", _path, root_perm, definitionOptions);
         line = preline;
     }
 
@@ -150,5 +152,22 @@ int unmount_nfs_dir(member* m) {
     free(path);
 
     return result;
+
+}
+
+// Set user permissions
+static int num_chars(int num) {
+
+    if (num == 0) return 1;
+
+    int count = 0;
+    while (num > 0) { num /= 10; ++count; }
+    return count;
+
+}
+void set_root_perm(uid_t uid) {
+
+    root_perm = (char *) malloc(sizeof(char) * (num_chars(uid) + 10));
+    sprintf(root_perm, "-maproot=%d", uid);
 
 }

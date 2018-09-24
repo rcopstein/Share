@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "protocol_mont.h"
+#include "system.h"
 #include "nfs_ops.h"
 #include "server.h"
 #include "output.h"
@@ -46,13 +48,11 @@ static int send_mont(member* m, uint8_t type) {
 
 int send_mont_req(member *m) {
 
-    printf("# Sent Mont Request to %s\n", m->id);
     return send_mont(m, TYPE_REQ);
 
 }
 int send_mont_rep(member *m) {
 
-    printf("# Sent Mont Reply to %s\n", m->id);
     return send_mont(m, TYPE_REP);
 
 }
@@ -90,8 +90,6 @@ void handle_mont_req(char *message) {
         return;
     }
 
-    printf("# Received Mont Request from %s\n", m->id);
-
     // Check if member is a recipient
     if (!(m->state & RECP)) {
 
@@ -101,7 +99,6 @@ void handle_mont_req(char *message) {
             return;
         }
 
-        printf("Added %s as a recipient!\n", m->id);
         member_set_state(m, RECP);
 
     }
@@ -119,13 +116,15 @@ void handle_mont_rep(char *message) {
         return;
     }
 
-    printf("# Received Mont Reply from %s\n", m->id);
-
     // Check if member has been mounted
     if (!(m->state & MOUNT)) {
 
         // Attempt to create folder
-        if (fops_make_dir(m->id)) {
+        become_user();
+        int res = fops_make_dir(m->id);
+        become_root();
+
+        if (res) {
             warning("Failed to create folder for %s\n", m->id);
             return;
         }
