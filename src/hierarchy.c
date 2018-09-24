@@ -248,37 +248,24 @@ void dissolve_name(char* name, char** owner) {
     strcpy(ext, dot);
     strcpy(at, ext);
     free(ext);
-
-    printf("Dissolved name is %s\n", name);
-    printf("Dissolved owner is %s\n", *owner);
 }
 
 void dissolve_conflict(HierarchyNode* level, char* name) {
 
     HierarchyNode* conflict1 = find_in_level(level, name, NULL);
-    if (conflict1 == NULL) {
-        printf("Dissolve: no files named %s! Abort!\n", name);
-        return; // No conflicts, do nothing
-    }
-
-    printf("Dissolve: one file named %s!\n", name);
+    if (conflict1 == NULL) return; // No conflicts, do nothing
 
     HierarchyNode* conflict2 = find_in_level(conflict1->sibling, name, NULL);
-    if (conflict2 != NULL) {
-        printf("Dissolve: two files named %s! Abort!\n", name);
-        return; // More than one conflict, do nothing
-    }
+    if (conflict2 != NULL) return; // More than one conflict, do nothing
 
-    printf("Dissolve: only one file named %s! No more conflict!\n", name);
     conflict1->conflict_free = true; // Only conflict means no conflict!
 
 }
 int check_conflict(HierarchyNode* level, HierarchyNode* file) {
 
     HierarchyNode* conflict = find_in_level(level, file->file->name, NULL);
-    if (conflict == NULL) return 0;
+    if (conflict == NULL) { file->conflict_free = true; return 0; }
 
-    printf("There is a conflict for %s!\n", conflict->file->name);
     conflict->conflict_free = false;
     file->conflict_free = false;
 
@@ -304,22 +291,21 @@ int add_lf(LogicalFile *file, char *path) {
 
     add_after(&parent->child, node, parent->child);
 
-    printf("Added file %s, Conflict free: %d\n", node->file->name, node->conflict_free);
-
     return 0;
 
 }
 int ren_lf(char *path, char* new_name) {
 
+    char* at = strchr(new_name, '@');
+    if (at != NULL) return -EINVAL;
+
     char* _path = (char *) malloc(strlen(path) + 1);
     strcpy(_path, path);
     int res = 0;
 
-    char* rest;
-    split_path(_path, &rest);
-
-    char* name = strsep(&rest, "@");
-    char* owner = rest;
+    char *name, *owner;
+    split_path(_path, &name);
+    dissolve_name(name, &owner);
 
     HierarchyNode* parent = get_node(_path);
     if (parent == NULL || !parent->file->isDir) res = -ENOENT;
@@ -337,8 +323,10 @@ int ren_lf(char *path, char* new_name) {
             char* oname = to_rn->file->name;
             to_rn->file->name = nname;
 
+            dissolve_conflict(level, to_rn->file->name);
             dissolve_conflict(level, oname);
             free(oname);
+
         }
     }
 
@@ -347,8 +335,6 @@ int ren_lf(char *path, char* new_name) {
 
 }
 LogicalFile* get_lf(char *path) {
-
-    printf("For path: %s\n", path);
 
     char* _path = (char *) malloc(strlen(path) + 1);
     strcpy(_path, path);
@@ -363,19 +349,14 @@ LogicalFile* get_lf(char *path) {
     HierarchyNode* node = parent;
     if (parent != NULL && name != NULL && strlen(name) > 0) node = find_in_level(parent->child, name, owner);
 
-    if (strcmp(name, "potato.xlsx") == 0) print_tree(0, parent);
-
     if (owner != NULL) free(owner);
     free(_path);
 
     LogicalFile* res = node != NULL ? node->file : NULL;
-    printf("Found file: %p\n", (void *) res);
     return res;
 
 }
 int rem_lf(char *path) {
-
-    printf("I'm here rem!\n");
 
     char* _path = (char *) malloc(strlen(path) + 1);
     strcpy(_path, path);

@@ -234,9 +234,8 @@ static int loopback_rename(const char *from, const char *to)
     split_path(_to_path, &_to_name);
 
     int result;
-    printf("Renamed from %s to %s/%s\n", _from_path, _to_path, _to_name);
 
-    if (strcmp(_to_path, _from_path) == 0) result = ren_lf(_from_path, _to_name);
+    if (strncmp(_from_path, _to_path, strlen(_to_path)) == 0) result = ren_lf(_from_path, _to_name);
     else result = -EPERM;
 
     free(_from_path);
@@ -254,16 +253,11 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
     char* _name;
     split_path(_path, &_name);
 
-    printf("In path '%s'\n", _path);
-    printf("Create file '%s'\n", _name);
-
     // CHANGE THIS FOR SOMETHING SMARTER
 
     member* current = get_current_member();
     char* _npath = (char *) malloc(sizeof(char) * (current->prefix_size + strlen(_name) + 2));
     sprintf(_npath, "%s/%s", current->prefix, _name);
-
-    printf("The real path is '%s'\n", _npath);
 
     // END CHANGE
 
@@ -276,8 +270,6 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
         LogicalFile* file = create_lf(false, _name, current->id, _npath);
         if ((res = add_lf(file, _path))) remove(_npath);
     }
-
-    printf("The result was %d\n", res);
 
     free(_npath);
     free(_path);
@@ -292,9 +284,6 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 
     char* _name;
     split_path(_path, &_name);
-
-    printf("In path '%s'\n", _path);
-    printf("Create file '%s'\n", _name);
 
     // CHANGE THIS FOR SOMETHING SMARTER
 
@@ -311,8 +300,6 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
         LogicalFile* file = create_lf(false, _name, current->id, _npath);
         if ((res = add_lf(file, _path))) remove(_npath);
     }
-
-    printf("The result was %d\n", res);
 
     free(_npath);
     free(_path);
