@@ -8,6 +8,7 @@
 #include <errno.h>
 
 #include "protocol_name.h"
+#include "system.h"
 #include "nfs_ops.h"
 #include "output.h"
 #include "server.h"
@@ -127,7 +128,12 @@ void handle_name_rep(char *message) {
     printf("My id is: %s\n", id);
 
     // Create folder for itself
-    if (fops_make_dir(id)) {
+
+    become_user();
+    int res = fops_make_dir(id);
+    become_root();
+
+    if (res) {
         error("Failed to create folder to self!\n", NULL);
         printf("%d\n", errno);
         return;

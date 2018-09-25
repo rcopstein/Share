@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "protocol_sync.h"
+#include "hierarchy.h"
 #include "members.h"
 #include "output.h"
 #include "server.h"
@@ -187,15 +188,182 @@ static void handle_sync_memb_req(char* message) {
 
 }
 
+// LOGICAL HIERARCHY
+static int send_lhie_sync_rep(member* memb) {
+
+    uint8_t rep = 1;
+    uint8_t type = SYNC_LHIE;
+    member* current = get_current_member();
+
+    size_t size = protocol_size;
+    size += current->id_size;
+    size += sizeof(uint16_t);
+    size += sizeof(uint8_t);
+    size += sizeof(uint8_t);
+
+    char* message = (char *) malloc(size);
+    char* aux = message;
+
+    memcpy(aux, protocol, protocol_size); // Copy Protocol
+    aux += protocol_size;
+
+    memcpy(aux, &type, sizeof(uint8_t)); // Copy Type
+    aux += sizeof(uint8_t);
+
+    memcpy(aux, &rep, sizeof(uint8_t)); // Copy Packet Type
+    aux += sizeof(uint8_t);
+
+    memcpy(aux, &current->id_size, sizeof(uint16_t)); // Copy ID Size
+    aux += sizeof(uint16_t);
+
+    memcpy(aux, current->id, current->id_size); // Copy ID
+    //aux += current->id_size;
+
+    char* message_complete = build_hierarchy_message(size, message, &size); // Append list of files
+    free(message);
+
+    printf("# Sent Logical Hierarchy Sync Reply to %s\n", memb->id);
+    return server_send(memb->ip, memb->port, message_complete, size);
+
+}
+static int send_lhie_sync_req(member* memb) {
+
+    uint8_t req = 0;
+    uint8_t type = SYNC_LHIE;
+    member* current = get_current_member();
+
+    size_t size = protocol_size;
+    size += current->id_size;
+    size += sizeof(uint16_t);
+    size += sizeof(uint8_t);
+    size += sizeof(uint8_t);
+
+    char* message = (char *) malloc(size);
+    char* aux = message;
+
+    memcpy(aux, protocol, protocol_size); // Copy Protocol
+    aux += protocol_size;
+
+    memcpy(aux, &type, sizeof(uint8_t)); // Copy Type
+    aux += sizeof(uint8_t);
+
+    memcpy(aux, &req, sizeof(uint8_t)); // Copy Packet Type
+    aux += sizeof(uint8_t);
+
+    memcpy(aux, &current->id_size, sizeof(uint16_t)); // Copy ID Size
+    aux += sizeof(uint16_t);
+
+    memcpy(aux, current->id, current->id_size); // Copy ID
+    // aux += current->id_size;
+
+    printf("# Sent Logical Hierarchy Sync Request to %s\n", memb->id);
+    return server_send(memb->ip, memb->port, message, size);
+
+}
+
+static void handle_sync_lhie_rep(char* message) {
+
+    // Read ID Size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read ID
+    char* id = (char *) malloc(sizeof(char) * (size + 1));
+    memcpy(id, message, size * sizeof(char));
+    message += size * sizeof(char);
+    id[size * sizeof(char)] = '\0';
+
+    // Find member
+    member* memb = get_certain_member(id);
+    if (memb == NULL) {
+        free(id);
+        return;
+    }
+
+    printf("# Received Logical Hierarchy Sync Request from %s\n", id);
+
+    // Read Sequence Number
+    uint16_t clock;
+    memcpy(&clock, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read Files Number
+    uint16_t number;
+    memcpy(&number, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read All Files
+    int flag = 0;
+    LogicalFile* file = (LogicalFile *) malloc(sizeof(LogicalFile));
+
+    for (int i = 0; i < number; ++i) {
+
+        uint16_t level;
+        memcpy(&level, message, sizeof(uint16_t));
+        message += sizeof(uint16_t);
+
+        if (deserialize_file(message, &file)) {
+            error("Failed to read file from sync reply!\n", NULL);
+            return;
+        }
+        message += size_of_lf(file);
+        if (sync_file(file)) flag = 1;
+
+        free(file->name);
+        free(file->owner);
+        free(file->realpath);
+
+    }
+
+    memb->lhier_clock = clock;
+    printf("%s's clock is now %d\n", id, clock);
+
+    if (flag) inc_lhier_seq_num();
+    free(file);
+    free(id);
+
+}
+static void handle_sync_lhie_req(char* message) {
+
+    // Read ID Size
+    uint16_t size;
+    memcpy(&size, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read ID
+    char* id = (char *) malloc(sizeof(char) * (size + 1));
+    memcpy(id, message, size * sizeof(uint16_t));
+    // message += size * sizeof(char);
+    id[size * sizeof(char)] = '\0';
+
+    printf("# Received Logical Hierarchy Sync Reply from %s\n", id);
+
+    // Find Member with that ID
+    member* memb = get_certain_member(id);
+    if (memb == NULL) {
+        printf("Failed to find member with id '%s'\n", id);
+        free(id);
+        return;
+    }
+
+    // Send a reply
+    send_sync_rep(memb, SYNC_LHIE);
+
+}
+
+// GENERAL
 int send_sync_req(member* memb, uint8_t type) {
 
     if (type == SYNC_MEMB) return send_memb_sync_req(memb);
+    if (type == SYNC_LHIE) return send_lhie_sync_req(memb);
     return 1;
 
 }
 int send_sync_rep(member* memb, uint8_t type) {
 
     if (type == SYNC_MEMB) return send_memb_sync_rep(memb);
+    if (type == SYNC_LHIE) return send_lhie_sync_rep(memb);
     return 1;
 
 }

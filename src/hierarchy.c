@@ -4,8 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <members.h>
 
+#include "output.h"
 #include "hierarchy.h"
+#include "portable_semaphores.h"
 
 typedef struct _HierarchyNode {
 
@@ -19,7 +22,29 @@ typedef struct _HierarchyNode {
 
 } HierarchyNode;
 
-// NEW
+// Sequence Number
+static uint16_t seq_num = 0;
+static portable_semaphore* seq_num_sem;
+
+uint16_t get_lhier_seq_num() {
+
+    return seq_num;
+
+}
+uint16_t inc_lhier_seq_num() {
+
+    if (seq_num_sem == NULL) {
+        seq_num_sem = (portable_semaphore *) malloc(sizeof(portable_semaphore));
+        portable_sem_init(seq_num_sem, 1);
+    }
+
+    portable_sem_wait(seq_num_sem);
+    ++seq_num;
+    portable_sem_post(seq_num_sem);
+
+    return seq_num_sem;
+
+}
 
 // Variables
 static LogicalFile root_f = { .isDir = true, .name = "/" };
@@ -396,16 +421,14 @@ size_t size_of_lf(LogicalFile* file) {
     return size;
 
 }
-int serialize_file(char** buffer, LogicalFile* file) {
-
-    if (*buffer == NULL) {
-        size_t size = size_of_lf(file);
-        *buffer = (char *) malloc(size);
-    }
+size_t serialize_file(char** buffer, LogicalFile* file) {
 
     char* aux = *buffer;
+    size_t size = size_of_lf(file);
     uint16_t name_size = (uint16_t) strlen(file->name);
     uint16_t owner_size = (uint16_t) strlen(file->owner);
+
+    if (*buffer == NULL) *buffer = (char *) malloc(size);
 
     memcpy(aux, &name_size, sizeof(uint16_t)); // Copy name size
     aux += sizeof(uint16_t);
@@ -422,7 +445,7 @@ int serialize_file(char** buffer, LogicalFile* file) {
     memcpy(aux, &file->isDir, sizeof(uint8_t)); // Copy is directory
     // aux += sizeof(uint8_t);
 
-    return 0;
+    return size;
 
 }
 int deserialize_file(char* buffer, LogicalFile** file) {
@@ -453,5 +476,99 @@ int deserialize_file(char* buffer, LogicalFile** file) {
     // buffer += sizeof(uint8_t);
 
     return 0;
+
+}
+
+static size_t total_size(HierarchyNode* node, uint16_t* count, char* owner) {
+
+    if (node == NULL) return 0;
+
+    size_t size = 0;
+    if (strcmp(node->file->owner, owner) == 0) size += size_of_lf(node->file) + sizeof(uint16_t);
+    size += total_size(node->sibling, count, owner);
+    size += total_size(node->child, count, owner);
+    (*count)++;
+
+    return size;
+
+}
+static void serialize_all(HierarchyNode* node, uint16_t level, char** message, char* owner) {
+
+    if (node == NULL) return;
+
+    if (strcmp(node->file->owner, owner) == 0) {
+        memcpy(*message, &level, sizeof(uint16_t)); // Copy Level
+        (*message) += sizeof(uint16_t);
+
+        (*message) += serialize_file(message, node->file); // Serialize Message
+    }
+
+    serialize_all(node->child, (uint16_t)(level+1), message, owner);
+    serialize_all(node->sibling, level, message, owner);
+
+}
+char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
+
+    uint16_t count = 0;
+    *size = prefix_size;
+    *size += sizeof(uint16_t);
+    *size += sizeof(uint16_t);
+    *size += sizeof(uint16_t);
+    member* current = get_current_member();
+
+    HierarchyNode* node = &root;
+    *size += total_size(node, &count, current->id);
+
+    char* message = (char *) malloc(prefix_size + *size);
+    char* aux = message;
+
+    if (message == NULL) {
+        error("Failed to allocate memory!\n", NULL);
+        return NULL;
+    }
+
+    memcpy(aux, prefix, prefix_size); // Copy Prefix
+    aux += prefix_size;
+
+    memcpy(aux, &seq_num, sizeof(uint16_t)); // Copy the sequence number
+    aux += sizeof(uint16_t);
+
+    memcpy(aux, &count, sizeof(uint16_t)); // Copy the number of files
+    aux += sizeof(uint16_t);
+
+    serialize_all(node->child, 1, &aux, current->id); // Serialize all files
+
+    count = 0;
+    memcpy(aux, &count, sizeof(uint16_t)); // Copy the terminator
+    // aux += sizeof(uint16_t);
+
+    return message;
+
+}
+
+// FIX THIS FUNCTION BELOW!
+
+void _read_hierarchy_message_entry(HierarchyNode* node, uint16_t* level, char** message) {
+
+    if (*level == 0) return;
+
+    LogicalFile* file = (LogicalFile *) malloc(sizeof(LogicalFile));
+    deserialize_file(*message, &file);
+    (*message) += size_of_lf(file);
+
+    uint16_t nlevel;
+    memcpy(&nlevel, *message, sizeof(uint16_t));
+
+    if (nlevel > *level) { *level = nlevel; _read_hierarchy_message_entry(node->child, level, message); }
+    if (nlevel == *level) _read_hierarchy_message_entry(node->sibling, level, message);
+
+}
+void read_hierarchy_message(char* message) {
+
+    uint16_t level;
+    memcpy(&level, message, sizeof(uint16_t));
+
+    char* aux = message;
+    HierarchyNode* node = &root;
 
 }

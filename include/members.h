@@ -14,6 +14,7 @@ typedef struct _member {
 
     // Clocks
     uint16_t member_clock;
+    uint16_t lhier_clock;
 
     // State Management
     uint8_t avail;

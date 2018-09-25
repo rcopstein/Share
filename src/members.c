@@ -288,6 +288,7 @@ int deserialize_member(char *input, member *container) {
     container->editable = sem_open(container->id, O_CREAT, 0200, 1);
 
     container->member_clock = 0;
+    container->lhier_clock = 0;
 
     return 0;
 }
@@ -312,6 +313,7 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
     result->editable = sem_open(id, O_CREAT, 0200, 1);
 
     result->member_clock = 0;
+    result->lhier_clock = 0;
 
     return result;
 
