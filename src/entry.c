@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "fops.h"
 #include "nops.h"
@@ -63,7 +64,6 @@ int confirm_root() {
 
     char res[256];
     scanf("%s", res);
-    printf("\n");
 
     return strlen(res) == 0 || res[0] == 'y' || res[0] == 'Y' ? 0 : 1;
 }
@@ -124,7 +124,7 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 // Mount
 
-void add_sample_mount_info() {
+void add_sample_mount_info_1() {
 
     LogicalFile* folder = create_lf(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
     LogicalFile* file1  = create_lf(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
@@ -134,11 +134,32 @@ void add_sample_mount_info() {
     add_lf(file1, "/Potatoes/");
     add_lf(file2, "/Potatoes/");
 
-    //rem_lf("/Potatoes/potato.xlsx@1");
-
     free_lf(folder);
     free_lf(file1);
     free_lf(file2);
+
+    inc_lhier_seq_num();
+}
+void add_sample_mount_info_2() {
+
+    LogicalFile* folder1 = create_lf(true, "Bananas", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* file1   = create_lf(false, "banana.doc", "peixe", "/Users/rcopstein/Desktop/Notas.xlsx");
+
+    add_lf(folder1, "/");
+    add_lf(file1, "Bananas");
+
+    LogicalFile* folder2 = create_lf(true, "Peixes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* file2   = create_lf(false, "carpas.docx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+
+    add_lf(folder2, "Bananas");
+    add_lf(file2, "Bananas/Peixes");
+
+    free_lf(folder1);
+    free_lf(file1);
+    free_lf(folder2);
+    free_lf(file2);
+
+    inc_lhier_seq_num();
 }
 
 
@@ -178,7 +199,7 @@ int create(char* ip, uint16_t port, char* mountpoint) {
 
     // Mount Filesystem
     if (mount_dir(mountpoint)) return clean_create(1, nfs);
-    add_sample_mount_info();
+    add_sample_mount_info_1();
 
     // Retake super user privileges
     become_root();
@@ -285,7 +306,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
 
     // Mount Filesystem
     if (mount_dir(mountpoint)) return clean_join(0);
-    add_sample_mount_info();
+    add_sample_mount_info_2();
 
     // Retake super user privileges
     become_root();

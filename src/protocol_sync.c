@@ -173,8 +173,6 @@ static void handle_sync_memb_req(char* message) {
     // message += size * sizeof(char);
     id[size * sizeof(char)] = '\0';
 
-    printf("# Received Member Sync Reply from %s\n", id);
-
     // Find Member with that ID
     member* memb = get_certain_member(id);
     if (memb == NULL) {
@@ -182,6 +180,8 @@ static void handle_sync_memb_req(char* message) {
         free(id);
         return;
     }
+
+    printf("# Received Member Sync Reply from %s\n", id);
 
     // Send a reply
     send_sync_rep(memb, SYNC_MEMB);
@@ -281,7 +281,7 @@ static void handle_sync_lhie_rep(char* message) {
         return;
     }
 
-    printf("# Received Logical Hierarchy Sync Request from %s\n", id);
+    printf("# Received Logical Hierarchy Sync Reply from %s\n", id);
 
     // Read Sequence Number
     uint16_t clock;
@@ -294,35 +294,12 @@ static void handle_sync_lhie_rep(char* message) {
     message += sizeof(uint16_t);
 
     // Read All Files
-    int flag = 0;
-    LogicalFile* file = (LogicalFile *) malloc(sizeof(LogicalFile));
-
-    for (int i = 0; i < number; ++i) {
-
-        uint16_t level;
-        memcpy(&level, message, sizeof(uint16_t));
-        message += sizeof(uint16_t);
-
-        if (deserialize_file(message, &file)) {
-            error("Failed to read file from sync reply!\n", NULL);
-            return;
-        }
-        message += size_of_lf(file);
-        if (sync_file(file)) flag = 1;
-
-        free(file->name);
-        free(file->owner);
-        free(file->realpath);
-
-    }
+    read_hierarchy_message(message);
 
     memb->lhier_clock = clock;
-    printf("%s's clock is now %d\n", id, clock);
+    printf("%s's hierarchy sequence number is now %d\n", id, clock);
 
-    if (flag) inc_lhier_seq_num();
-    free(file);
     free(id);
-
 }
 static void handle_sync_lhie_req(char* message) {
 
@@ -337,8 +314,6 @@ static void handle_sync_lhie_req(char* message) {
     // message += size * sizeof(char);
     id[size * sizeof(char)] = '\0';
 
-    printf("# Received Logical Hierarchy Sync Reply from %s\n", id);
-
     // Find Member with that ID
     member* memb = get_certain_member(id);
     if (memb == NULL) {
@@ -346,6 +321,8 @@ static void handle_sync_lhie_req(char* message) {
         free(id);
         return;
     }
+
+    printf("# Received Logical Hierarchy Sync Request from %s\n", id);
 
     // Send a reply
     send_sync_rep(memb, SYNC_LHIE);
@@ -385,6 +362,11 @@ void handle_sync_protocol(char* message) {
     if (type == SYNC_MEMB) {
         if (packet_type == 0) handle_sync_memb_req(message); // Request
         if (packet_type == 1) handle_sync_memb_rep(message); // Reply
+    }
+
+    if (type == SYNC_LHIE) {
+        if (packet_type == 0) handle_sync_lhie_req(message); // Request
+        if (packet_type == 1) handle_sync_lhie_rep(message); // Reply
     }
 
 }

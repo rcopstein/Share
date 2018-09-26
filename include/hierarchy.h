@@ -38,7 +38,8 @@ int rem_lf(char *path);
 
 // Serialization
 size_t size_of_lf(LogicalFile* file);
-void read_hierarchy_message(char* message);
 int deserialize_file(char* buffer, LogicalFile** file);
 size_t serialize_file(char** buffer, LogicalFile* file);
+
+void read_hierarchy_message(char* message);
 char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size);

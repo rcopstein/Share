@@ -17,8 +17,10 @@ typedef struct _HierarchyNode {
     bool conflict_free;
 
     LogicalFile* file;
+    struct _HierarchyNode* parent;
     struct _HierarchyNode* child;
-    struct _HierarchyNode* sibling;
+    struct _HierarchyNode* next;
+    struct _HierarchyNode* prev;
 
 } HierarchyNode;
 
@@ -42,13 +44,13 @@ uint16_t inc_lhier_seq_num() {
     ++seq_num;
     portable_sem_post(seq_num_sem);
 
-    return seq_num_sem;
+    return seq_num;
 
 }
 
 // Variables
 static LogicalFile root_f = { .isDir = true, .name = "/" };
-static HierarchyNode root = { .file = &root_f, .child = NULL, .sibling = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
+static HierarchyNode root = { .file = &root_f, .parent = NULL, .child = NULL, .next = NULL, .prev = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
 
 // Auxiliar Functions
 void split_path(char* path, char** name) {
@@ -72,7 +74,7 @@ void print_tree(int level, HierarchyNode* root) {
     printf("%s %s\n", root->file->name, root->file->owner);
 
     print_tree(level+1, root->child);
-    print_tree(level, root->sibling);
+    print_tree(level, root->next);
 
 }
 
@@ -86,11 +88,18 @@ LogicalFile* create_lf(bool isDir, char* name, char* owner, char* realpath) {
     result->name = (char *) malloc(strlen(name) + 1);
     strcpy(result->name, name);
 
-    result->owner = (char *) malloc(strlen(owner) + 1);
-    strcpy(result->owner, owner);
+    if (!result->isDir) {
 
-    result->realpath = (char *) malloc(strlen(realpath) + 1);
-    strcpy(result->realpath, realpath);
+        result->owner = (char *) malloc(strlen(owner) + 1);
+        strcpy(result->owner, owner);
+
+        result->realpath = (char *) malloc(strlen(realpath) + 1);
+        strcpy(result->realpath, realpath);
+
+    } else {
+        result->owner = NULL;
+        result->realpath = NULL;
+    }
 
     result->num_links = 0;
 
@@ -120,8 +129,10 @@ static HierarchyNode* create_hn(LogicalFile* file) {
     result->conflict_free = true;
     result->folder_count = 0;
     result->file_count = 0;
-    result->sibling = NULL;
     result->child = NULL;
+    result->parent = NULL;
+    result->prev = NULL;
+    result->next = NULL;
 
     return result;
 
@@ -134,29 +145,64 @@ static void free_hn(HierarchyNode* node) {
 }
 
 // Tree Management
-static void add_after(HierarchyNode** prev, HierarchyNode* node, HierarchyNode* next) {
+static void hn_add_next(HierarchyNode* prev, HierarchyNode* node) {
 
-    node->sibling = next;
-    *prev = node;
+    if (prev->next != NULL) prev->next->prev = node;
+
+    node->next = prev->next;
+    prev->next = node;
+    node->prev = prev;
 
 }
-static void rem_after(HierarchyNode** prev) {
+static void hn_add_child(HierarchyNode *parent, HierarchyNode *node, bool last) {
 
-    HierarchyNode* curr = *prev;
-    *prev = curr->sibling;
-    free_hn(curr);
+    if (parent->child != NULL) {
+
+        if (last) {
+            HierarchyNode *aux = parent->child;
+            while (aux->next != NULL) aux = aux->next;
+            hn_add_next(aux, node);
+            return;
+        }
+
+        parent->child->parent = NULL;
+        parent->child->prev = node;
+
+    }
+
+    node->next = parent->child;
+    node->parent = parent;
+    parent->child = node;
+
+}
+static void hn_rem(HierarchyNode* node) {
+
+    if (node->prev != NULL) {
+        if (node->next != NULL) node->next->prev = node->prev;
+        node->prev->next = node->next;
+    }
+
+    if (node->parent != NULL) {
+        if (node->next != NULL) {
+            node->next->prev = node->prev;
+            node->next->parent = node->parent;
+        }
+        node->parent->child = node->next;
+    }
+
+    free_hn(node);
 
 }
 
 static HierarchyNode* find_in_level(HierarchyNode* level, char* name, char* owner) {
 
     while (level != NULL) {
-        if (strcmp(level->file->name, name) == 0) {
+        if (name == NULL || strcmp(level->file->name, name) == 0) {
             if (owner == NULL || strcmp(level->file->owner, owner) == 0) {
                 return level;
             }
         }
-        level = level->sibling;
+        level = level->next;
     }
 
     return NULL;
@@ -167,19 +213,19 @@ static void rem_beneath(HierarchyNode* parent, char* name, char* owner) {
     print_tree(0, root.child);
     printf("\n");
 
-    HierarchyNode** aux = &parent->child;
-    while (*aux != NULL) {
-        if (strcmp((*aux)->file->name, name) == 0) {
-            if (owner == NULL || strcmp((*aux)->file->owner, owner) == 0) {
-                if ((*aux)->file->isDir) parent->folder_count--;
+    HierarchyNode* aux = parent->child;
+    while (aux != NULL) {
+        if (strcmp(aux->file->name, name) == 0) {
+            if (owner == NULL || strcmp(aux->file->owner, owner) == 0) {
+                if (aux->file->isDir) parent->folder_count--;
                 else parent->file_count--;
                 break;
             }
         }
-        aux = &(*aux)->sibling;
+        aux = aux->next;
     }
 
-    if (*aux != NULL) rem_after(aux);
+    if (aux != NULL) hn_rem(aux);
     print_tree(0, root.child);
 }
 static HierarchyNode* get_node(char *path) {
@@ -231,7 +277,7 @@ LogicalFile** list_lf(char* path, int** conflicts) {
         result[aux] = folder->file;
         aux++;
 
-        folder = folder->sibling;
+        folder = folder->next;
     }
 
     (*conflicts)[aux] = -1;
@@ -280,7 +326,7 @@ void dissolve_conflict(HierarchyNode* level, char* name) {
     HierarchyNode* conflict1 = find_in_level(level, name, NULL);
     if (conflict1 == NULL) return; // No conflicts, do nothing
 
-    HierarchyNode* conflict2 = find_in_level(conflict1->sibling, name, NULL);
+    HierarchyNode* conflict2 = find_in_level(conflict1->next, name, NULL);
     if (conflict2 != NULL) return; // More than one conflict, do nothing
 
     conflict1->conflict_free = true; // Only conflict means no conflict!
@@ -314,8 +360,7 @@ int add_lf(LogicalFile *file, char *path) {
     HierarchyNode* level = parent->child;
     check_conflict(level, node);
 
-    add_after(&parent->child, node, parent->child);
-
+    hn_add_child(parent, node, true);
     return 0;
 
 }
@@ -409,14 +454,16 @@ int rem_lf(char *path) {
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
 
-    uint16_t name_size = (uint16_t) strlen(file->name);
-    uint16_t owner_size = (uint16_t) strlen(file->owner);
-
-    size_t size = 1;
-    size += name_size;
-    size += owner_size;
+    size_t size = 0;
     size += sizeof(uint8_t);
-    size += sizeof(uint16_t) * 2;
+    size += sizeof(uint16_t);
+    size += strlen(file->name);
+
+    if (!file->isDir) {
+        size += strlen(file->realpath);
+        size += strlen(file->owner);
+        size += sizeof(uint16_t) * 2;
+    }
 
     return size;
 
@@ -426,7 +473,6 @@ size_t serialize_file(char** buffer, LogicalFile* file) {
     char* aux = *buffer;
     size_t size = size_of_lf(file);
     uint16_t name_size = (uint16_t) strlen(file->name);
-    uint16_t owner_size = (uint16_t) strlen(file->owner);
 
     if (*buffer == NULL) *buffer = (char *) malloc(size);
 
@@ -436,14 +482,27 @@ size_t serialize_file(char** buffer, LogicalFile* file) {
     memcpy(aux, file->name, sizeof(char) * name_size); // Copy name
     aux += sizeof(char) * name_size;
 
-    memcpy(aux, &owner_size, sizeof(uint16_t)); // Copy owner size
-    aux += sizeof(uint16_t);
-
-    memcpy(aux, file->owner, sizeof(char) * owner_size); // Copy owner
-    aux += sizeof(char) * owner_size;
-
     memcpy(aux, &file->isDir, sizeof(uint8_t)); // Copy is directory
-    // aux += sizeof(uint8_t);
+    aux += sizeof(uint8_t);
+
+    if (!file->isDir) {
+
+        uint16_t owner_size = (uint16_t) strlen(file->owner);
+        uint16_t realpath_size = (uint16_t) strlen(file->realpath);
+
+        memcpy(aux, &owner_size, sizeof(uint16_t)); // Copy owner size
+        aux += sizeof(uint16_t);
+
+        memcpy(aux, file->owner, sizeof(char) * owner_size); // Copy owner
+        aux += sizeof(char) * owner_size;
+
+        memcpy(aux, &realpath_size, sizeof(uint16_t)); // Copy realpath size
+        aux += sizeof(uint16_t);
+
+        memcpy(aux, file->realpath, sizeof(char) * realpath_size); // Copy realpath
+        //aux += sizeof(char) * realpath_size;
+
+    }
 
     return size;
 
@@ -459,21 +518,39 @@ int deserialize_file(char* buffer, LogicalFile** file) {
     memcpy(&size, buffer, sizeof(uint16_t)); // Read name size
     buffer += sizeof(uint16_t);
 
-    char* name = (char *) malloc(sizeof(char) * size); // Allocate name
-    memcpy(name, buffer, size); // Read name
+    char* name = (char *) malloc(sizeof(char) * (size + 1)); // Allocate name
+    memcpy(name, buffer, sizeof(char) * size); // Read name
     (*file)->name = name; // Assign name
-    buffer += size;
-
-    memcpy(&size, buffer, sizeof(uint16_t)); // Read owner size
-    buffer += sizeof(uint16_t);
-
-    char* owner = (char *) malloc(sizeof(char) * size); // Allocate owner
-    memcpy(owner, buffer, size); // Read owner
-    (*file)->owner = owner; // Assign owner
+    name[size] = '\0';
     buffer += size;
 
     memcpy(&(*file)->isDir, buffer, sizeof(uint8_t)); // Read is directory
-    // buffer += sizeof(uint8_t);
+    buffer += sizeof(uint8_t);
+
+    if (!(*file)->isDir) {
+
+        memcpy(&size, buffer, sizeof(uint16_t)); // Read owner size
+        buffer += sizeof(uint16_t);
+
+        char* owner = (char *) malloc(sizeof(char) * (size + 1)); // Allocate owner
+        memcpy(owner, buffer, size); // Read owner
+        (*file)->owner = owner; // Assign owner
+        owner[size] = '\0';
+        buffer += size;
+
+        memcpy(&size, buffer, sizeof(uint16_t)); // Read realpath size
+        buffer += sizeof(uint16_t);
+
+        char *realpath = (char *) malloc(sizeof(char) * (size + 1)); // Allocate realpath
+        memcpy(realpath, buffer, size); // Read realpath
+        (*file)->realpath = realpath; // Assign realpath
+        realpath[size] = '\0';
+        //buffer += size;
+
+    } else {
+        (*file)->owner = NULL;
+        (*file)->realpath = NULL;
+    }
 
     return 0;
 
@@ -484,28 +561,56 @@ static size_t total_size(HierarchyNode* node, uint16_t* count, char* owner) {
     if (node == NULL) return 0;
 
     size_t size = 0;
-    if (strcmp(node->file->owner, owner) == 0) size += size_of_lf(node->file) + sizeof(uint16_t);
-    size += total_size(node->sibling, count, owner);
-    size += total_size(node->child, count, owner);
-    (*count)++;
 
+    if (node->file->isDir) {
+
+        size = total_size(node->child, count, owner);
+        if (size > 0) {
+            size += size_of_lf(node->file) + sizeof(uint16_t);
+            (*count)++;
+        }
+
+    }
+
+    else {
+
+        if (strcmp(node->file->owner, owner) == 0) {
+            size += size_of_lf(node->file) + sizeof(uint16_t);
+            (*count)++;
+        }
+
+    }
+
+    size += total_size(node->next, count, owner);
     return size;
 
 }
-static void serialize_all(HierarchyNode* node, uint16_t level, char** message, char* owner) {
+static bool serialize_all(HierarchyNode* node, uint16_t level, char** message, char* owner) {
 
-    if (node == NULL) return;
+    if (node == NULL) return false;
 
-    if (strcmp(node->file->owner, owner) == 0) {
+    bool flag = false;
+    size_t size = 0;
+
+    if (node->file->isDir || strcmp(node->file->owner, owner) == 0) { // It's a file that belongs to me
+
         memcpy(*message, &level, sizeof(uint16_t)); // Copy Level
         (*message) += sizeof(uint16_t);
 
-        (*message) += serialize_file(message, node->file); // Serialize Message
+        size = serialize_file(message, node->file); // Serialize Message
+        (*message) += size;
+        flag = true;
+
     }
 
-    serialize_all(node->child, (uint16_t)(level+1), message, owner);
-    serialize_all(node->sibling, level, message, owner);
+    if (node->file->isDir) {
 
+        flag = serialize_all(node->child, (uint16_t)(level+1), message, owner); // Remove folder entry if it is empty!
+        if (!flag) (*message) -= size + sizeof(uint16_t);
+
+    }
+
+    return serialize_all(node->next, level, message, owner) || flag;
 }
 char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
 
@@ -516,7 +621,7 @@ char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
     *size += sizeof(uint16_t);
     member* current = get_current_member();
 
-    HierarchyNode* node = &root;
+    HierarchyNode* node = root.child;
     *size += total_size(node, &count, current->id);
 
     char* message = (char *) malloc(prefix_size + *size);
@@ -527,8 +632,10 @@ char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
         return NULL;
     }
 
-    memcpy(aux, prefix, prefix_size); // Copy Prefix
-    aux += prefix_size;
+    if (prefix != NULL) {
+        memcpy(aux, prefix, prefix_size); // Copy Prefix
+        aux += prefix_size;
+    }
 
     memcpy(aux, &seq_num, sizeof(uint16_t)); // Copy the sequence number
     aux += sizeof(uint16_t);
@@ -536,7 +643,7 @@ char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
     memcpy(aux, &count, sizeof(uint16_t)); // Copy the number of files
     aux += sizeof(uint16_t);
 
-    serialize_all(node->child, 1, &aux, current->id); // Serialize all files
+    serialize_all(node, 1, &aux, current->id); // Serialize all files
 
     count = 0;
     memcpy(aux, &count, sizeof(uint16_t)); // Copy the terminator
@@ -546,29 +653,92 @@ char* build_hierarchy_message(size_t prefix_size, char* prefix, size_t* size) {
 
 }
 
-// FIX THIS FUNCTION BELOW!
-
-void _read_hierarchy_message_entry(HierarchyNode* node, uint16_t* level, char** message) {
-
-    if (*level == 0) return;
+static LogicalFile* _read_logical_file(char** message) {
 
     LogicalFile* file = (LogicalFile *) malloc(sizeof(LogicalFile));
     deserialize_file(*message, &file);
     (*message) += size_of_lf(file);
 
-    uint16_t nlevel;
-    memcpy(&nlevel, *message, sizeof(uint16_t));
+    return file;
 
-    if (nlevel > *level) { *level = nlevel; _read_hierarchy_message_entry(node->child, level, message); }
-    if (nlevel == *level) _read_hierarchy_message_entry(node->sibling, level, message);
+}
+static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* current, LogicalFile *file) {
+
+    if (file->isDir) {
+        HierarchyNode* node = find_in_level(current->next, file->name, NULL);
+        if (node == NULL) {
+            node = create_hn(file);
+            if (parent->child != NULL) hn_add_next(current, node); // Add next to the current
+            else hn_add_child(parent, node, false);
+        }
+        return node;
+    }
+
+    else {
+        while (1) {
+            HierarchyNode *node = find_in_level(current->next, NULL, file->owner);
+
+            if (node == NULL) { // This is a new entry for this owner
+                printf("%s is new!\n", file->name);
+                node = create_hn(file);
+                if (parent->child != NULL) hn_add_next(current, node); // Add next to the current
+                else hn_add_child(parent, node, false);
+                return node;
+
+            } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
+                printf("I already have %s\n", node->file->name);
+                // TODO: Update entry
+                return node;
+
+            } else { // The names are different, my entry has been removed
+                printf("I'm removing %s\n", node->file->name);
+                hn_rem(node);
+            }
+        }
+    }
+}
+static void _read_hierarchy_message_entry(HierarchyNode* parent, uint16_t* level, char** message) {
+
+    if (*level == 0) return;
+
+    uint16_t l;
+
+    HierarchyNode first = { .next = parent->child };
+    HierarchyNode* current = &first;
+
+    do {
+
+        LogicalFile* file = _read_logical_file(message);
+        current = _sync_logical_file(parent, current, file);
+        free_lf(file);
+
+        memcpy(&l, *message, sizeof(uint16_t));
+        (*message) += sizeof(uint16_t);
+
+        if (l > *level) _read_hierarchy_message_entry(current, &l, message);
+
+    }
+    while (l == *level);
+    *level = l;
 
 }
 void read_hierarchy_message(char* message) {
 
+    printf("\n");
+    print_tree(0, root.child);
+    printf("\n");
+
+    // Read first level
     uint16_t level;
     memcpy(&level, message, sizeof(uint16_t));
 
-    char* aux = message;
+    // Call recursive read of message
+    char* aux = message + sizeof(uint16_t);
     HierarchyNode* node = &root;
+    _read_hierarchy_message_entry(node, &level, &aux);
+
+    printf("\n");
+    print_tree(0, root.child);
+    printf("\n");
 
 }

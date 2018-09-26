@@ -72,6 +72,7 @@ static member* copy_member(member* m) {
 
 int initialize_metadata_members(member *m) {
 
+    /*
     FILE* file;
 
     if ((file = fopen(filepath, "wb+")) == NULL)
@@ -88,6 +89,7 @@ int initialize_metadata_members(member *m) {
     fwrite(line, size, 1, file);
     fclose(file);
     free(line);
+     */
 
     self = m;
 

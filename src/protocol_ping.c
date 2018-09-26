@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <hierarchy.h>
 
 #include "protocol_ping.h"
 #include "protocol_sync.h"
@@ -16,6 +17,7 @@ int send_ping(member* m) {
 
     // Calculate Message Size
     size_t size = current->id_size;
+    size += sizeof(uint16_t);
     size += sizeof(uint16_t);
     size += sizeof(uint16_t);
     size += protocol_size;
@@ -35,6 +37,10 @@ int send_ping(member* m) {
 
     uint16_t member_clock = get_member_clock(); // Copy Member Clock
     memcpy(aux, &member_clock, sizeof(uint16_t));
+    aux += sizeof(uint16_t);
+
+    uint16_t lhier_seq_num = get_lhier_seq_num(); // Copy Logical Hierarchy Sequence Number
+    memcpy(aux, &lhier_seq_num, sizeof(uint16_t));
     // aux += sizeof(uint16_t);
 
     // Send Message
@@ -42,7 +48,6 @@ int send_ping(member* m) {
     return server_send(m->ip, m->port, message, size);
 
 }
-
 void handle_ping_protocol(char* message) {
 
     // Read ID Size
@@ -73,7 +78,13 @@ void handle_ping_protocol(char* message) {
     // Read Member Clock
     uint16_t member_clock;
     memcpy(&member_clock, message, sizeof(uint16_t));
+    message += sizeof(uint16_t);
+
+    // Read Logical Hierarchy Sequence Number
+    uint16_t lhier_seq_num;
+    memcpy(&lhier_seq_num, message, sizeof(uint16_t));
+    // message += sizeof(uint16_t);
 
     if (member_clock > m->member_clock) send_sync_req(m, SYNC_MEMB);
-
+    if (lhier_seq_num > m->lhier_clock) send_sync_req(m, SYNC_LHIE);
 }
