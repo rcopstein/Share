@@ -318,6 +318,7 @@ void dissolve_name(char* name, char** owner) {
     char* ext = (char *) malloc(sizeof(char) * (strlen(dot) + 1));
     strcpy(ext, dot);
     strcpy(at, ext);
+
     free(ext);
 }
 
@@ -395,6 +396,7 @@ int ren_lf(char *path, char* new_name) {
 
             dissolve_conflict(level, to_rn->file->name);
             dissolve_conflict(level, oname);
+
             free(oname);
 
         }
@@ -668,7 +670,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
         HierarchyNode* node = find_in_level(current->next, file->name, NULL);
         if (node == NULL) {
             node = create_hn(file);
-            if (parent->child != NULL) hn_add_next(current, node); // Add next to the current
+            if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
             else hn_add_child(parent, node, false);
         }
         return node;
@@ -681,7 +683,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
             if (node == NULL) { // This is a new entry for this owner
                 printf("%s is new!\n", file->name);
                 node = create_hn(file);
-                if (parent->child != NULL) hn_add_next(current, node); // Add next to the current
+                if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
                 return node;
 
@@ -703,7 +705,7 @@ static void _read_hierarchy_message_entry(HierarchyNode* parent, uint16_t* level
 
     uint16_t l;
 
-    HierarchyNode first = { .next = parent->child };
+    HierarchyNode first = { .file = NULL, .next = parent->child };
     HierarchyNode* current = &first;
 
     do {

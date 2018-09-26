@@ -103,6 +103,11 @@ static inline struct loopback_dirp *get_dirp(struct fuse_file_info *fi)
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+    //
+    // I Believe FUSE will take care of freeing these names... I'll leave it to it
+    // TODO: Allocate names before sending them to FUSE. Let it free them
+    //
+
     int* conflicts;
     LogicalFile** list = list_lf((char *) path, &conflicts);
     if (list == NULL) return -ENOENT;
@@ -119,7 +124,7 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
             char* name = resolved_name(aux);
             filler(buf, name, NULL, 0);
-            free(name);
+            //free(name);
 
         } else {
 
@@ -129,8 +134,8 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         ++count;
     }
 
-    free(conflicts);
-    free(list);
+    // free(conflicts);
+    // free(list);
 
     return 0;
 

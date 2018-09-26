@@ -149,7 +149,7 @@ void add_sample_mount_info_2() {
     add_lf(file1, "Bananas");
 
     LogicalFile* folder2 = create_lf(true, "Peixes", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file2   = create_lf(false, "carpas.docx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* file2   = create_lf(false, "carpas.docx", "1-1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
     add_lf(folder2, "Bananas");
     add_lf(file2, "Bananas/Peixes");
