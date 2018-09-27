@@ -205,7 +205,7 @@ static HierarchyNode* find_in_level(HierarchyNode* level, char* name, char* owne
 
     while (level != NULL) {
         if (name == NULL || strcmp(level->file->name, name) == 0) {
-            if (owner == NULL || strcmp(level->file->owner, owner) == 0) {
+            if (owner == NULL || (level->file->owner != NULL && strcmp(level->file->owner, owner) == 0)) {
                 return level;
             }
         }
@@ -677,9 +677,9 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
         HierarchyNode* node = find_in_level(current->next, file->name, NULL);
         if (node == NULL) {
             node = create_hn(file);
+            check_conflict(parent->child, node);
             if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
             else hn_add_child(parent, node, false);
-            check_conflict(parent->child, node);
         }
         return node;
     }
@@ -691,9 +691,9 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
             if (node == NULL) { // This is a new entry for this owner
                 printf("%s is new!\n", file->name);
                 node = create_hn(file);
+                check_conflict(parent->child, node);
                 if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
-                check_conflict(parent->child, node);
                 return node;
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
