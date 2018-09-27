@@ -153,6 +153,10 @@ static void hn_add_next(HierarchyNode* prev, HierarchyNode* node) {
     prev->next = node;
     node->prev = prev;
 
+    while (prev->parent == NULL) prev = prev->prev;
+    if (node->file->isDir) prev->parent->folder_count++;
+    else prev->parent->file_count++;
+
 }
 static void hn_add_child(HierarchyNode *parent, HierarchyNode *node, bool last) {
 
@@ -169,6 +173,9 @@ static void hn_add_child(HierarchyNode *parent, HierarchyNode *node, bool last) 
         parent->child->prev = node;
 
     }
+
+    if (node->file->isDir) parent->folder_count++;
+    else parent->file_count++;
 
     node->next = parent->child;
     node->parent = parent;
@@ -354,8 +361,8 @@ int add_lf(LogicalFile *file, char *path) {
     HierarchyNode* parent = get_node(path);
     if (parent == NULL || !parent->file->isDir) return -ENOENT;
 
-    if (file->isDir) parent->folder_count++;
-    else parent->file_count++;
+    //if (file->isDir) parent->folder_count++;
+    //else parent->file_count++;
 
     HierarchyNode* node = create_hn(file);
     HierarchyNode* level = parent->child;
@@ -672,6 +679,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
             node = create_hn(file);
             if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
             else hn_add_child(parent, node, false);
+            check_conflict(parent->child, node);
         }
         return node;
     }
@@ -685,6 +693,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
                 node = create_hn(file);
                 if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
+                check_conflict(parent->child, node);
                 return node;
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
@@ -694,7 +703,12 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
 
             } else { // The names are different, my entry has been removed
                 printf("I'm removing %s\n", node->file->name);
+
+                char* name = (char *) malloc(sizeof(char) * (strlen(node->file->name) + 1));
+                strcpy(name, node->file->name);
                 hn_rem(node);
+                dissolve_conflict(parent->child, name);
+                free(name);
             }
         }
     }

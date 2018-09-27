@@ -126,15 +126,20 @@ int initialize(char* id, char* ip, uint16_t port) {
 
 void add_sample_mount_info_1() {
 
-    LogicalFile* folder = create_lf(true, "Potatoes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* folder1 = create_lf(true, "Potatoes", "", "");
     LogicalFile* file1  = create_lf(false, "potato.xlsx", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
-    LogicalFile* file2  = create_lf(false, "potato.xlsx", "1-1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
-    add_lf(folder, "/");
+    LogicalFile* folder2 = create_lf(true, "Bananas", "", "");
+    LogicalFile* file2  = create_lf(false, "banana.doc", "1", "/Users/rcopstein/Desktop/Notas.xlsx");
+
+    add_lf(folder1, "/");
     add_lf(file1, "/Potatoes/");
-    add_lf(file2, "/Potatoes/");
 
-    free_lf(folder);
+    add_lf(folder2, "/");
+    add_lf(file2, "/Bananas/");
+
+    free_lf(folder1);
+    free_lf(folder2);
     free_lf(file1);
     free_lf(file2);
 
@@ -142,21 +147,21 @@ void add_sample_mount_info_1() {
 }
 void add_sample_mount_info_2() {
 
-    LogicalFile* folder1 = create_lf(true, "Bananas", "1", "/Users/rcopstein/Desktop/s1");
-    LogicalFile* file1   = create_lf(false, "banana.doc", "peixe", "/Users/rcopstein/Desktop/Notas.xlsx");
+    LogicalFile* folder1 = create_lf(true, "Bananas", "", "");
+    LogicalFile* file1   = create_lf(false, "banana.doc", "1-1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
     add_lf(folder1, "/");
     add_lf(file1, "Bananas");
 
-    LogicalFile* folder2 = create_lf(true, "Peixes", "1", "/Users/rcopstein/Desktop/s1");
+    LogicalFile* folder2 = create_lf(true, "Peixes", "", "");
     LogicalFile* file2   = create_lf(false, "carpas.docx", "1-1", "/Users/rcopstein/Desktop/Notas.xlsx");
 
     add_lf(folder2, "Bananas");
     add_lf(file2, "Bananas/Peixes");
 
     free_lf(folder1);
-    free_lf(file1);
     free_lf(folder2);
+    free_lf(file1);
     free_lf(file2);
 
     inc_lhier_seq_num();
