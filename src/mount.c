@@ -239,26 +239,15 @@ static int loopback_write(const char *path, const char *buf, size_t size, off_t 
 
 static int loopback_rename(const char *from, const char *to)
 {
-    // TODO: Change this completely!
+    LogicalFile* lf = get_lf((char *) from); // Find File
+    if (lf == NULL) return -ENOENT;
 
-    char* _from_path = (char *) malloc(strlen(from) + 1); // Copy path to we don't mess with params
-    strcpy(_from_path, from);
+    member* owner = get_certain_member(lf->owner); // Find Owner
+    if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
 
-    char* _to_path = (char *) malloc(strlen(to) + 1); // Copy path to we don't mess with params
-    strcpy(_to_path, to);
+    int res = send_freq_req_ren(owner, from, to); // Request owner to rename it
 
-    char* _to_name;
-    split_path(_to_path, &_to_name);
-
-    int result;
-
-    if (strncmp(_from_path, _to_path, strlen(_to_path)) == 0) result = ren_lf(_from_path, _to_name);
-    else result = -EPERM;
-
-    free(_from_path);
-    free(_to_path);
-
-    return result;
+    return res;
 }
 
 static int loopback_mknod(const char *path, mode_t mode, dev_t rdev)
@@ -294,7 +283,7 @@ static int loopback_mknod(const char *path, mode_t mode, dev_t rdev)
 
 static int loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path so we don't mess with params
     strcpy(_path, path);
 
     char* _name;
@@ -303,33 +292,16 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
     // TODO: CHANGE THIS FOR SOMETHING SMARTER
 
     member* current = get_current_member();
-    int res = send_freq_req(FREQ_ADD, current, _path, _name);
+    int res = send_freq_req_add(current, _path, _name, fi->flags);
 
-    /*
-    LogicalFile* file = create_lf(false, _name, current->id, _name);
-    char* npath = resolve_path(file);
-
-    printf("Creating at %s\n", npath);
-
-    become_user();
-    int res = open(npath, fi->flags, mode);
-    become_root();
-
-    if (res == -1) res = -errno;
-    else {
-        if ((res = add_lf(file, _path))) { remove(npath); res = -ENOENT; }
-        else inc_lhier_seq_num();
-    }
-
-    free(npath);
-    */
+    if (res > 0) { fi->fh = (uint64_t) res; res = 0; }
 
     free(_path);
     return res;
 }
 
-static int loopback_truncate(const char *path, off_t size) {
-
+static int loopback_truncate(const char *path, off_t size)
+{
     LogicalFile* file = get_lf((char *) path);
     if (file == NULL) return -ENOENT;
 
@@ -339,6 +311,19 @@ static int loopback_truncate(const char *path, off_t size) {
 
     if (result < 0) return -errno;
     return result;
+}
+
+static int loopback_unlink(const char *path)
+{
+    LogicalFile* lf = get_lf((char *) path); // Find File
+    if (lf == NULL) return -ENOENT;
+
+    member* owner = get_certain_member(lf->owner); // Find Owner
+    if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
+
+    int res = send_freq_req_del(owner, path); // Request owner to delete it
+
+    return res;
 }
 
 
@@ -409,19 +394,6 @@ loopback_releasedir(const char *path, struct fuse_file_info *fi)
 
     closedir(d->dp);
     free(d);
-
-    return 0;
-}
-
-static int
-loopback_unlink(const char *path)
-{
-    int res;
-
-    res = unlink(path);
-    if (res == -1) {
-        return -errno;
-    }
 
     return 0;
 }
@@ -1059,7 +1031,7 @@ int mount_dir(char* mp) {
     char** list = malloc(sizeof(char*) * num);
 
     char foreground[] = "-f";
-    char debug[]      = "-d";
+    // char debug[]      = "-d";
     char options[]    = "-o";
     char volname[]    = "volname=Shared\\ Folder,allow_other,noappledouble";
 

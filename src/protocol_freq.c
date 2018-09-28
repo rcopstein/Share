@@ -10,7 +10,7 @@
 static const char protocol[] = "freq";
 static const uint8_t protocol_size = 4;
 
-int send_freq_req(const char* type, member* m, char* param1, char* param2) {
+int send_freq_req(const char *type, member *m, char *param1, char *param2, int flags) {
 
     // Define Type
 
@@ -21,6 +21,7 @@ int send_freq_req(const char* type, member* m, char* param1, char* param2) {
     // Calculate Size
 
     size_t size = sizeof(uint16_t) * 2;
+    size += sizeof(mode_t);
     size += protocol_size;
     size += param1_size;
     size += param2_size;
@@ -51,6 +52,9 @@ int send_freq_req(const char* type, member* m, char* param1, char* param2) {
     memcpy(aux, param2, param2_size); // Write Param2
     aux += param2_size;
 
+    memcpy(aux, &flags, sizeof(int)); // Write mode
+    aux += sizeof(int);
+
     // Open Socket
 
     int socket = nops_open_connection(m->ip, m->port);
@@ -71,13 +75,23 @@ int send_freq_req(const char* type, member* m, char* param1, char* param2) {
     free(message);
     return result;
 }
+int send_freq_req_add(member *m, char *path, char *name, int flags) {
+    return send_freq_req(FREQ_ADD, m, path, name, flags);
+}
+int send_freq_req_ren(member* m, const char* from, const char* to) {
+    return send_freq_req(FREQ_REN, m, (char *) from, (char *) to, 0);
+}
+int send_freq_req_del(member* m, const char* path) {
+    return send_freq_req(FREQ_DEL, m, (char *) path, "", 0);
+}
+
 int send_freq_rep(int16_t response, int socket) {
 
     return nops_send_message(socket, &response, sizeof(int16_t));
 
 }
 
-void handle_freq_add(uint16_t path_size, char* path, uint16_t name_size, char* name, int socket) {
+void handle_freq_add(char *path, char *name, int flags, int socket) {
 
     member* current = get_current_member();
 
@@ -89,22 +103,65 @@ void handle_freq_add(uint16_t path_size, char* path, uint16_t name_size, char* n
     // TODO: Attempt to recreate the file while result is EEXIST
 
     become_user();
-    int res = open(npath, O_CREAT | O_EXCL, 0755);
+    int res = open(npath, flags, 0755);
     become_root();
 
     if (res == -1) { printf("Error opening file %d!\n", errno); res = -errno; }
     else {
-        if ((res = add_lf(file, path))) { printf("Error adding file to lhier!\n"); remove(npath); res = -ENOENT; }
+        if (add_lf(file, path)) { printf("Error adding file to lhier!\n"); remove(npath); res = -ENOENT; }
         else inc_lhier_seq_num();
     }
 
     free(npath);
-    send_freq_rep((uint16_t) res, socket);
+    send_freq_rep((int16_t) res, socket);
 
     printf("Response for FREQ ADD was %d\n", res);
 }
+void handle_freq_ren(char* from, char* to, int socket) {
+
+    int res = 0;
+    LogicalFile* file = get_lf(from);
+    if (file == NULL) { res = -ENOENT; goto END; }
+
+    char* name;
+    split_path(to, &name);
+    if (strncmp(from, to, strlen(to)) != 0) { res = -EINVAL; goto END; }
+
+    free(file->name);
+    file->name = (char *) malloc(sizeof(char) * (strlen(name) + 1));
+    strcpy(file->name, name);
+    inc_lhier_seq_num();
+
+    END:
+
+    send_freq_rep((int16_t) res, socket);
+
+    printf("Response for FREQ ADD was %d\n", res);
+}
+void handle_freq_del(char* path, int socket) {
+
+    int res = 0;
+
+    LogicalFile* file = get_lf(path);
+    if (file == NULL) { res = -ENOENT; goto END; }
+
+    char* filepath = resolve_path(file);
+    res = remove(filepath);
+    free(filepath);
+
+    if (res < 0) { res = -errno; goto END; }
+    rem_lf(path);
+
+    END:
+
+    send_freq_rep((int16_t) res, socket);
+
+    printf("Response for FREQ DEL was %d\n", res);
+}
+
 void handle_freq_protocol(char* message, int socket) {
 
+    int mode;
     char type[4];
     char *param1, *param2;
     uint16_t param1_size, param2_size;
@@ -125,10 +182,15 @@ void handle_freq_protocol(char* message, int socket) {
 
     param2 = (char *) malloc(param2_size + 1); // Allocate Param2
     strncpy(param2, message, param2_size); // Read Param2
-    // message += param2_size;
+    message += param2_size;
 
-    if (!strcmp(type, FREQ_ADD)) handle_freq_add(param1_size, param1, param2_size, param2, socket);
-    // if (!strcmp(type, FREQ_DEL)) handle_freq_del(message);
-    // if (!strcmp(type, FREQ_REN)) handle_freq_ren(message);
+    memcpy(&mode, message, sizeof(int)); // Read mode
+    message += sizeof(int);
 
+    if (!strcmp(type, FREQ_ADD)) handle_freq_add(param1, param2, mode, socket);
+    if (!strcmp(type, FREQ_REN)) handle_freq_ren(param1, param2, socket);
+    if (!strcmp(type, FREQ_DEL)) handle_freq_del(param1, socket);
+
+    free(param1);
+    free(param2);
 }

@@ -92,6 +92,7 @@ int initialize_metadata_members(member *m) {
      */
 
     self = m;
+    m->state = (uint16_t)(m->state | AVAIL);
 
     return 0;
 }
@@ -178,6 +179,8 @@ member* get_current_member() {
 }
 
 member* get_certain_member(char* id) {
+
+    if (!strcmp(id, self->id)) return get_current_member();
 
     mlist* aux = members;
 
