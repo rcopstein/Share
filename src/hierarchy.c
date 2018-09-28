@@ -389,6 +389,11 @@ int add_lf(LogicalFile *file, char *path) {
     check_conflict(level, node);
 
     hn_add_child(parent, node, true);
+
+    printf("\n");
+    print_tree(0, root.child);
+    printf("\n");
+
     return 0;
 
 }
@@ -430,8 +435,12 @@ int ren_lf(char *path, char* new_name) {
     }
 
     free(_path);
-    return res;
 
+    printf("\n");
+    print_tree(0, root.child);
+    printf("\n");
+
+    return res;
 }
 LogicalFile* get_lf(char *path) {
 
@@ -453,7 +462,6 @@ LogicalFile* get_lf(char *path) {
 
     LogicalFile* res = node != NULL ? node->file : NULL;
     return res;
-
 }
 int rem_lf(char *path) {
 
@@ -476,8 +484,12 @@ int rem_lf(char *path) {
     printf("Result of deletion was %d\n", res);
     if (owner != NULL) free(owner);
     free(_path);
-    return res;
 
+    printf("\n");
+    print_tree(0, root.child);
+    printf("\n");
+
+    return res;
 }
 
 

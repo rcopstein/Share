@@ -98,7 +98,9 @@ void handle_freq_add(char *path, char *name, int flags, int socket) {
     LogicalFile* file = create_lf(false, name, current->id, name);
     char* npath = resolve_path(file);
 
-    printf("Creating at %s\n", npath);
+    // TODO: WE HAVE A PROBLEM HERE! NPATH IS BUGGING!
+
+    printf("Creating at %s with size %zu\n", npath, strlen(npath));
 
     // TODO: Attempt to recreate the file while result is EEXIST
 
@@ -106,9 +108,9 @@ void handle_freq_add(char *path, char *name, int flags, int socket) {
     int res = open(npath, flags, 0755);
     become_root();
 
-    if (res == -1) { printf("Error opening file %d!\n", errno); res = -errno; }
+    if (res == -1) res = -errno;
     else {
-        if (add_lf(file, path)) { printf("Error adding file to lhier!\n"); remove(npath); res = -ENOENT; }
+        if (add_lf(file, path)) { remove(npath); res = -ENOENT; }
         else inc_lhier_seq_num();
     }
 
@@ -120,23 +122,15 @@ void handle_freq_add(char *path, char *name, int flags, int socket) {
 void handle_freq_ren(char* from, char* to, int socket) {
 
     int res = 0;
-    LogicalFile* file = get_lf(from);
-    if (file == NULL) { res = -ENOENT; goto END; }
 
     char* name;
     split_path(to, &name);
-    if (strncmp(from, to, strlen(to)) != 0) { res = -EINVAL; goto END; }
-
-    free(file->name);
-    file->name = (char *) malloc(sizeof(char) * (strlen(name) + 1));
-    strcpy(file->name, name);
-    inc_lhier_seq_num();
-
-    END:
+    if (strncmp(from, to, strlen(to)) != 0) res = -EINVAL;
+    else res = ren_lf(from, name);
 
     send_freq_rep((int16_t) res, socket);
 
-    printf("Response for FREQ ADD was %d\n", res);
+    printf("Response for FREQ REN was %d\n", res);
 }
 void handle_freq_del(char* path, int socket) {
 
