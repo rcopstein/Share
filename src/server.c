@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/socket.h>
 #include <ctype.h>
 #include <errno.h>
 
@@ -86,7 +85,7 @@ void* _server_start(void* vport) {
         printf("\n\n");
 #endif
 
-        protocol_handle(buffer, size);
+        protocol_handle(buffer, size, client_socket);
         free(buffer);
 
         nops_close_connection(client_socket);

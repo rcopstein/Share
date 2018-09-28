@@ -52,7 +52,22 @@ uint16_t inc_lhier_seq_num() {
 static LogicalFile root_f = { .isDir = true, .name = "/" };
 static HierarchyNode root = { .file = &root_f, .parent = NULL, .child = NULL, .next = NULL, .prev = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
 
+
 // Auxiliar Functions
+char* resolve_path(LogicalFile* file) {
+
+    member* current = get_current_member();
+
+    size_t size = strlen(file->realpath);
+    size += current->prefix_size;
+    size += strlen(file->owner);
+    size += sizeof(char) * 3;
+
+    char* result = (char *) malloc(size);
+    sprintf(result, "%s/%s/%s", current->prefix, file->owner, file->realpath);
+
+    return result;
+}
 void split_path(char* path, char** name) {
 
     *name = strrchr(path, '/'); // Find the last occurrence of '/'
@@ -77,6 +92,7 @@ void print_tree(int level, HierarchyNode* root) {
     print_tree(level, root->next);
 
 }
+
 
 // Logical Files
 LogicalFile* create_lf(bool isDir, char* name, char* owner, char* realpath) {
@@ -120,6 +136,7 @@ void free_lf(LogicalFile* file) {
 
 }
 
+
 // Hierarchy Nodes
 static HierarchyNode* create_hn(LogicalFile* file) {
 
@@ -143,6 +160,7 @@ static void free_hn(HierarchyNode* node) {
     free(node);
 
 }
+
 
 // Tree Management
 static void hn_add_next(HierarchyNode* prev, HierarchyNode* node) {
@@ -292,6 +310,7 @@ LogicalFile** list_lf(char* path, int** conflicts) {
     return result;
 }
 
+
 // Conflict Checking
 char* resolved_name(LogicalFile* file) {
 
@@ -351,6 +370,7 @@ int check_conflict(HierarchyNode* level, HierarchyNode* file) {
     return 1;
 
 }
+
 
 // Public Management Operations
 int add_lf(LogicalFile *file, char *path) {
@@ -459,6 +479,7 @@ int rem_lf(char *path) {
     return res;
 
 }
+
 
 // Serialization
 size_t size_of_lf(LogicalFile* file) {

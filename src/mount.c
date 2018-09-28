@@ -28,11 +28,13 @@
 #include <sys/param.h>
 #include <sys/vnode.h>
 #include <pthread.h>
+#include <system.h>
 
 #include "mount.h"
 #include "members.h"
 #include "hierarchy.h"
 #include "output.h"
+#include "protocol_freq.h"
 
 #if defined(_POSIX_C_SOURCE)
 typedef unsigned char  u_char;
@@ -86,7 +88,11 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
     }
     else {
 
-        if (lstat(file->realpath, stbuf) == -1) return -errno;
+        char* realpath = resolve_path(file);
+        int result = lstat(realpath, stbuf);
+        free(realpath);
+
+        if (result == -1) return -errno;
 
 #if FUSE_VERSION >= 29
         stbuf->st_blksize = 0;
@@ -103,6 +109,8 @@ static inline struct loopback_dirp *get_dirp(struct fuse_file_info *fi)
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+    // TODO: Check if I can free the names!
+
     int* conflicts;
     LogicalFile** list = list_lf((char *) path, &conflicts);
     if (list == NULL) return -ENOENT;
@@ -177,13 +185,13 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int loopback_mkdir(const char *path, mode_t mode)
 {
-    char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
+    char* _path = (char *) malloc(strlen(path) + 1); // Copy path so we don't mess with params
     strcpy(_path, path);
 
     char* lastsep = strrchr(_path, '/'); // Find the last occurrence of '/'
     *lastsep = '\0';
 
-    LogicalFile* lfolder = create_lf(true, lastsep + 1, get_current_member()->id, "");
+    LogicalFile* lfolder = create_lf(true, lastsep + 1, "", "");
     int result = add_lf(lfolder, _path);
 
     free_lf(lfolder);
@@ -203,7 +211,10 @@ static int loopback_open(const char *path, struct fuse_file_info *fi)
     LogicalFile* file = get_lf((char *) path);
     if (file == NULL) return -ENOENT;
 
-    int fd = open(file->realpath, fi->flags);
+    char* realpath = resolve_path(file);
+    int fd = open(realpath, fi->flags);
+    free(realpath);
+
     if (fd == -1) return -errno;
     fi->fh = (uint64_t) fd;
     return 0;
@@ -228,6 +239,8 @@ static int loopback_write(const char *path, const char *buf, size_t size, off_t 
 
 static int loopback_rename(const char *from, const char *to)
 {
+    // TODO: Change this completely!
+
     char* _from_path = (char *) malloc(strlen(from) + 1); // Copy path to we don't mess with params
     strcpy(_from_path, from);
 
@@ -248,8 +261,7 @@ static int loopback_rename(const char *from, const char *to)
     return result;
 }
 
-static int
-loopback_mknod(const char *path, mode_t mode, dev_t rdev)
+static int loopback_mknod(const char *path, mode_t mode, dev_t rdev)
 {
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
     strcpy(_path, path);
@@ -280,8 +292,7 @@ loopback_mknod(const char *path, mode_t mode, dev_t rdev)
     return res;
 }
 
-static int
-loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+static int loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path to we don't mess with params
     strcpy(_path, path);
@@ -289,25 +300,45 @@ loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     char* _name;
     split_path(_path, &_name);
 
-    // CHANGE THIS FOR SOMETHING SMARTER
+    // TODO: CHANGE THIS FOR SOMETHING SMARTER
 
     member* current = get_current_member();
-    char* _npath = (char *) malloc(sizeof(char) * (current->prefix_size + current->id_size + strlen(_name) + 3));
-    sprintf(_npath, "%s/%s/%s", current->prefix, current->id, _name);
+    int res = send_freq_req(FREQ_ADD, current, _path, _name);
 
-    // END CHANGE
+    /*
+    LogicalFile* file = create_lf(false, _name, current->id, _name);
+    char* npath = resolve_path(file);
 
-    int res = open(_npath, fi->flags, mode);
+    printf("Creating at %s\n", npath);
+
+    become_user();
+    int res = open(npath, fi->flags, mode);
+    become_root();
 
     if (res == -1) res = -errno;
     else {
-        LogicalFile* file = create_lf(false, _name, current->id, _npath);
-        if ((res = add_lf(file, _path))) remove(_npath);
+        if ((res = add_lf(file, _path))) { remove(npath); res = -ENOENT; }
+        else inc_lhier_seq_num();
     }
 
-    free(_npath);
+    free(npath);
+    */
+
     free(_path);
     return res;
+}
+
+static int loopback_truncate(const char *path, off_t size) {
+
+    LogicalFile* file = get_lf((char *) path);
+    if (file == NULL) return -ENOENT;
+
+    char* realpath = resolve_path(file);
+    int result = truncate(realpath, size);
+    free(realpath);
+
+    if (result < 0) return -errno;
+    return result;
 }
 
 
@@ -961,7 +992,6 @@ static struct fuse_operations loopback_oper = {
         .getattr     = loopback_getattr,
         .fgetattr    = loopback_fgetattr,
         .readdir     = loopback_readdir,
-        .mknod       = loopback_mknod,
         .mkdir       = loopback_mkdir,
         .unlink      = loopback_unlink,
         .rmdir       = loopback_rmdir,
@@ -974,6 +1004,8 @@ static struct fuse_operations loopback_oper = {
         .statfs      = loopback_statfs,
         .flush       = loopback_flush,
         .release     = loopback_release,
+        .truncate    = loopback_truncate,
+        //.mknod       = loopback_mknod,
         //.readlink    = loopback_readlink,
         //.opendir     = loopback_opendir,
         //.releasedir  = loopback_releasedir,
@@ -1023,18 +1055,22 @@ int mount_dir(char* mp) {
 
     // Create Parameters
     int num = 5;
+    int aux = num;
     char** list = malloc(sizeof(char*) * num);
 
     char foreground[] = "-f";
+    char debug[]      = "-d";
     char options[]    = "-o";
-    char volname[]    = "volname=Shared\\ Folder,allow_other";
+    char volname[]    = "volname=Shared\\ Folder,allow_other,noappledouble";
 
     // First pointer is ignored, Second pointer is the path
-    list[0] = mountpoint;
-    list[1] = mountpoint;
-    list[2] = foreground;
-    list[3] = options;
-    list[4] = volname;
+
+    list[--aux] = volname;
+    list[--aux] = options;
+    //list[--aux] = debug;
+    list[--aux] = foreground;
+    list[--aux] = mountpoint;
+    list[--aux] = mountpoint;
 
     // Attempt to initialize FUSE
 

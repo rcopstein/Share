@@ -16,6 +16,7 @@ typedef struct _LogicalFile {
 } LogicalFile;
 
 // Auxiliar Functions
+char* resolve_path(LogicalFile* file);
 void split_path(char* path, char** name);
 
 // Sequence Number

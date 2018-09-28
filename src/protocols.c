@@ -8,10 +8,11 @@
 #include "protocol_mont.h"
 #include "protocol_ping.h"
 #include "protocol_sync.h"
+#include "protocol_freq.h"
 
 #define PROTOCOL_SIZE 4
 
-void protocol_handle(char* content, size_t size) {
+void protocol_handle(char* content, size_t size, int socket) {
 
     if (size < PROTOCOL_SIZE) {
         warning("Message is too small! Couldn't identify protocol!\n", NULL);
@@ -27,5 +28,6 @@ void protocol_handle(char* content, size_t size) {
     else if (strncmp("mont", protocol, PROTOCOL_SIZE) == 0) handle_mont_protocol(content);
     else if (strncmp("ping", protocol, PROTOCOL_SIZE) == 0) handle_ping_protocol(content);
     else if (strncmp("sync", protocol, PROTOCOL_SIZE) == 0) handle_sync_protocol(content);
+    else if (strncmp("freq", protocol, PROTOCOL_SIZE) == 0) handle_freq_protocol(content, socket);
     else warning("Received unknown protocol '%s'\n", protocol);
 }
