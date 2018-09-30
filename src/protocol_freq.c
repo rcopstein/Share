@@ -21,7 +21,7 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
     // Calculate Size
 
     size_t size = sizeof(uint16_t) * 2;
-    size += sizeof(mode_t);
+    size += sizeof(uint32_t);
     size += protocol_size;
     size += param1_size;
     size += param2_size;
@@ -52,8 +52,8 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
     memcpy(aux, param2, param2_size); // Write Param2
     aux += param2_size;
 
-    memcpy(aux, &flags, sizeof(int)); // Write mode
-    aux += sizeof(int);
+    memcpy(aux, &flags, sizeof(uint32_t)); // Write flags
+    // aux += sizeof(uint32_t);
 
     // Open Socket
 
@@ -91,14 +91,12 @@ int send_freq_rep(int16_t response, int socket) {
 
 }
 
-void handle_freq_add(char *path, char *name, int flags, int socket) {
+void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
     member* current = get_current_member();
 
     LogicalFile* file = create_lf(false, name, current->id, name);
     char* npath = resolve_path(file);
-
-    // TODO: WE HAVE A PROBLEM HERE! NPATH IS BUGGING!
 
     printf("Creating at %s with size %zu\n", npath, strlen(npath));
 
@@ -155,8 +153,8 @@ void handle_freq_del(char* path, int socket) {
 
 void handle_freq_protocol(char* message, int socket) {
 
-    int mode;
     char type[4];
+    uint32_t flags;
     char *param1, *param2;
     uint16_t param1_size, param2_size;
 
@@ -168,20 +166,22 @@ void handle_freq_protocol(char* message, int socket) {
     message += sizeof(uint16_t);
 
     param1 = (char *) malloc(param1_size + 1); // Allocate Param1
-    strncpy(param1, message, param1_size); // Read Param1
+    memcpy(param1, message, param1_size); // Read Param1
+    param1[param1_size] = '\0';
     message += param1_size;
 
     memcpy(&param2_size, message, sizeof(uint16_t)); // Read Param2 Size
     message += sizeof(uint16_t);
 
     param2 = (char *) malloc(param2_size + 1); // Allocate Param2
-    strncpy(param2, message, param2_size); // Read Param2
+    memcpy(param2, message, param2_size); // Read Param2
+    param2[param2_size] = '\0';
     message += param2_size;
 
-    memcpy(&mode, message, sizeof(int)); // Read mode
-    message += sizeof(int);
+    memcpy(&flags, message, sizeof(uint32_t)); // Read flags
+    // message += sizeof(uint32_t);
 
-    if (!strcmp(type, FREQ_ADD)) handle_freq_add(param1, param2, mode, socket);
+    if (!strcmp(type, FREQ_ADD)) handle_freq_add(param1, param2, flags, socket);
     if (!strcmp(type, FREQ_REN)) handle_freq_ren(param1, param2, socket);
     if (!strcmp(type, FREQ_DEL)) handle_freq_del(param1, socket);
 

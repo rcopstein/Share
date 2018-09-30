@@ -389,13 +389,7 @@ int add_lf(LogicalFile *file, char *path) {
     check_conflict(level, node);
 
     hn_add_child(parent, node, true);
-
-    printf("\n");
-    print_tree(0, root.child);
-    printf("\n");
-
     return 0;
-
 }
 int ren_lf(char *path, char* new_name) {
 
@@ -435,11 +429,6 @@ int ren_lf(char *path, char* new_name) {
     }
 
     free(_path);
-
-    printf("\n");
-    print_tree(0, root.child);
-    printf("\n");
-
     return res;
 }
 LogicalFile* get_lf(char *path) {
@@ -473,21 +462,14 @@ int rem_lf(char *path) {
     split_path(_path, &name);
     dissolve_name(name, &owner);
 
-    printf("Attempting to remove file %s with owner %s at path %s\n", name, owner, _path);
-
     HierarchyNode* parent = get_node(_path);
     if (parent != NULL && parent->file->isDir) {
         rem_beneath(parent, name, owner);
         dissolve_conflict(parent->child, name);
     } else res = -ENOENT;
 
-    printf("Result of deletion was %d\n", res);
     if (owner != NULL) free(owner);
     free(_path);
-
-    printf("\n");
-    print_tree(0, root.child);
-    printf("\n");
 
     return res;
 }
@@ -772,10 +754,6 @@ static void _read_hierarchy_message_entry(HierarchyNode* parent, uint16_t* level
 
 }
 void read_hierarchy_message(char* message) {
-
-    printf("\n");
-    print_tree(0, root.child);
-    printf("\n");
 
     // Read first level
     uint16_t level;

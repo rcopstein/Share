@@ -291,6 +291,8 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
 
     // TODO: CHANGE THIS FOR SOMETHING SMARTER
 
+    printf("Asked for flags %d\n", fi->flags);
+
     member* current = get_current_member();
     int res = send_freq_req_add(current, _path, _name, fi->flags);
 
