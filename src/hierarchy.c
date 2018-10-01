@@ -398,6 +398,8 @@ int add_lf(LogicalFile *file, char *path) {
 }
 int ren_lf(char *path, char* new_name) {
 
+    printf("From '%s' to '%s'\n", path, new_name);
+
     char* at = strchr(new_name, '@');
     if (at != NULL) return -EINVAL;
 
