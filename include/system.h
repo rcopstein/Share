@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ntsid.h>
+#include <unistd.h>
 
 uid_t get_uid();
 gid_t get_gid();

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "protocol_freq.h"
 #include "hierarchy.h"
