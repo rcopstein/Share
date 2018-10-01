@@ -80,7 +80,7 @@ static void check_connection(member* m) {
     }
 
     // Update avail
-    m->avail = (uint8_t) fmin(m->avail + 1, 4);
+    m->avail = (uint8_t)(m->avail >= 4 ? 4 : m->avail + 1);
 
     // Send Ping
     send_ping(m);
