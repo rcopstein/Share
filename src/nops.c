@@ -73,7 +73,7 @@ int nops_open_connection(char* ip, uint16_t port) {
     addr.sin_addr.s_addr = inet_addr(ip);
 
     if (connect(sock, (struct sockaddr *)&addr, sizeof(addr))) {
-        printf("Failed to connect to socket! Error: %d\n", errno);
+        // printf("Failed to connect to socket! Error: %d\n", errno);
         return -1;
     }
 

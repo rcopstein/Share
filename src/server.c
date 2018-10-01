@@ -110,7 +110,7 @@ int server_send(char* ip, uint16_t port, void* message, size_t size) {
 
     // Open the connection socket
     int sock = nops_open_connection(ip, port);
-    if (sock < 0) return error("Failed to open connection!\n", NULL);
+    if (sock < 0) return 1; // error("Failed to open connection!\n", NULL);
 
     // Send the message
     if (nops_send_message(sock, message, size)) {

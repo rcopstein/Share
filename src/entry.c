@@ -23,7 +23,6 @@
 #include "system.h"
 
 const char METADATA_DIR[] = "metadata/";
-const char METADATA_HIERARCHY[] = "metadata/logical_hierarchy.txt";
 
 // Auxiliary
 
@@ -188,8 +187,6 @@ int clean_create(int level, char* nfs) {
 }
 int create(char* ip, uint16_t port, char* mountpoint) {
 
-    // TO-DO: Allow user to specify owner of the files
-
     char id[] = "1";
     char nfs[] = "1/";
 
@@ -204,7 +201,7 @@ int create(char* ip, uint16_t port, char* mountpoint) {
 
     // Mount Filesystem
     if (mount_dir(mountpoint)) return clean_create(1, nfs);
-    add_sample_mount_info_1();
+    // add_sample_mount_info_1();
 
     // Retake super user privileges
     become_root();
@@ -311,7 +308,7 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
 
     // Mount Filesystem
     if (mount_dir(mountpoint)) return clean_join(0);
-    add_sample_mount_info_2();
+    // add_sample_mount_info_2();
 
     // Retake super user privileges
     become_root();

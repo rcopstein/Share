@@ -3,7 +3,8 @@
 #include <string.h>
 #include <math.h>
 #include <protocol_mont.h>
-#include <zconf.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <stdbool.h>
 
 #include "protocol_ping.h"

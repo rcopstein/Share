@@ -1,4 +1,6 @@
-#include <zconf.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "system.h"
 
 // Variables

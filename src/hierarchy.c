@@ -8,7 +8,7 @@
 
 #include "output.h"
 #include "hierarchy.h"
-#include "portable_semaphores.h"
+#include "semaphores.h"
 
 typedef struct _HierarchyNode {
 
@@ -26,7 +26,7 @@ typedef struct _HierarchyNode {
 
 // Sequence Number
 static uint16_t seq_num = 0;
-static portable_semaphore* seq_num_sem;
+static semaphore* seq_num_sem;
 
 uint16_t get_lhier_seq_num() {
 
@@ -36,7 +36,7 @@ uint16_t get_lhier_seq_num() {
 uint16_t inc_lhier_seq_num() {
 
     if (seq_num_sem == NULL) {
-        seq_num_sem = (portable_semaphore *) malloc(sizeof(portable_semaphore));
+        seq_num_sem = (semaphore *) malloc(sizeof(semaphore));
         portable_sem_init(seq_num_sem, 1);
     }
 
@@ -298,9 +298,14 @@ LogicalFile** list_lf(char* path, int** conflicts) {
     int aux = 0;
     while (folder != NULL) {
 
-        (*conflicts)[aux] = folder->conflict_free ? 0 : 1;
-        result[aux] = folder->file;
-        aux++;
+        member* owner = get_certain_member(folder->file->owner);
+        if (owner == NULL || member_get_state(owner, AVAIL)) {
+
+            (*conflicts)[aux] = folder->conflict_free ? 0 : 1;
+            result[aux] = folder->file;
+            aux++;
+
+        }
 
         folder = folder->next;
     }

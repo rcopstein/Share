@@ -1,7 +1,7 @@
 #include <stdlib.h>
-#include "portable_semaphores.h"
+#include "semaphores.h"
 
-void portable_sem_init(portable_semaphore *s, uint32_t value)
+void portable_sem_init(semaphore *s, uint32_t value)
 {
 #ifdef __APPLE__
     dispatch_semaphore_t *sem = &s->sem;
@@ -11,7 +11,7 @@ void portable_sem_init(portable_semaphore *s, uint32_t value)
 #endif
 }
 
-void portable_sem_wait(portable_semaphore *s)
+void portable_sem_wait(semaphore *s)
 {
 #ifdef __APPLE__
     dispatch_semaphore_wait(s->sem, DISPATCH_TIME_FOREVER);
@@ -22,7 +22,7 @@ void portable_sem_wait(portable_semaphore *s)
 #endif
 }
 
-void portable_sem_post(portable_semaphore *s)
+void portable_sem_post(semaphore *s)
 {
 #ifdef __APPLE__
     dispatch_semaphore_signal(s->sem);
@@ -31,7 +31,7 @@ void portable_sem_post(portable_semaphore *s)
 #endif
 }
 
-void portable_sem_destroy(portable_semaphore *s)
+void portable_sem_destroy(semaphore *s)
 {
 #ifndef __APPLE__
     sem_destroy(s->sem);

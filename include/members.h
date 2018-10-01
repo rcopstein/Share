@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <semaphore.h>
+#include <semaphores.h>
 
 #define AVAIL 0x00001
 #define MOUNT 0x00002
@@ -19,7 +19,7 @@ typedef struct _member {
     // State Management
     uint8_t avail;
     uint16_t state;
-    sem_t* editable;
+    semaphore editable;
 
     // Identification
     char* id;

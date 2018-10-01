@@ -6,10 +6,10 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <nops.h>
-#include <zconf.h>
+#include <sys/types.h>
 #include <background.h>
 
-#include "portable_semaphores.h"
+#include "semaphores.h"
 #include "protocol_mont.h"
 #include "members.h"
 #include "output.h"
@@ -33,7 +33,7 @@ static uint16_t child_count = 0;
 
 // Version Clock
 static uint16_t member_clock = 0;
-static portable_semaphore* member_clock_sem = NULL;
+static semaphore* member_clock_sem = NULL;
 
 uint16_t get_member_clock() {
 
@@ -43,7 +43,7 @@ uint16_t get_member_clock() {
 uint16_t inc_member_clock() {
 
     if (member_clock_sem == NULL) {
-        member_clock_sem = (portable_semaphore *) malloc(sizeof(portable_semaphore));
+        member_clock_sem = (semaphore *) malloc(sizeof(semaphore));
         portable_sem_init(member_clock_sem, 1);
     }
 
@@ -180,6 +180,7 @@ member* get_current_member() {
 
 member* get_certain_member(char* id) {
 
+    if (id == NULL) return NULL;
     if (!strcmp(id, self->id)) return get_current_member();
 
     mlist* aux = members;
@@ -290,7 +291,7 @@ int deserialize_member(char *input, member *container) {
     // aux += size;
 
     container->state = 0;
-    container->editable = sem_open(container->id, O_CREAT, 0200, 1);
+    portable_sem_init(&container->editable, 1);
 
     container->member_clock = 0;
     container->lhier_clock = 0;
@@ -315,7 +316,7 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
     result->avail = 0;
     result->state = 0;
-    result->editable = sem_open(id, O_CREAT, 0200, 1);
+    portable_sem_init(&result->editable, 1);
 
     result->member_clock = 0;
     result->lhier_clock = 0;
@@ -374,24 +375,24 @@ uint16_t member_get_state(member* m, uint16_t state) {
 }
 uint16_t member_set_state(member* m, uint16_t state) {
 
-    sem_wait(m->editable);
+    portable_sem_wait(&m->editable);
 
     uint16_t result = state | m->state;
     m->state = result;
 
-    sem_post(m->editable);
+    portable_sem_post(&m->editable);
 
     return result;
 
 }
 uint16_t member_unset_state(member* m, uint16_t state) {
 
-    sem_wait(m->editable);
+    portable_sem_wait(&m->editable);
 
     uint16_t result = ~state & m->state;
     m->state = result;
 
-    sem_post(m->editable);
+    portable_sem_post(&m->editable);
 
     return result;
 

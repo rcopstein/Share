@@ -124,7 +124,7 @@ void handle_freq_ren(char* from, char* to, int socket) {
     char* name;
     split_path(to, &name);
     if (strncmp(from, to, strlen(to)) != 0) res = -EINVAL;
-    else res = ren_lf(from, name);
+    else if (!(res = ren_lf(from, name))) inc_lhier_seq_num();
 
     send_freq_rep((int16_t) res, socket);
 
