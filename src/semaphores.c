@@ -16,9 +16,7 @@ void portable_sem_wait(semaphore *s)
 #ifdef __APPLE__
     dispatch_semaphore_wait(s->sem, DISPATCH_TIME_FOREVER);
 #else
-    int r;
-    do { r = sem_wait(&s->sem); }
-    while (r == -1 && errno == EINTR);
+    sem_wait(&s->sem);
 #endif
 }
 
@@ -34,7 +32,7 @@ void portable_sem_post(semaphore *s)
 void portable_sem_destroy(semaphore *s)
 {
 #ifndef __APPLE__
-    sem_destroy(s->sem);
+    sem_destroy(&s->sem);
 #endif
     free(s);
 }

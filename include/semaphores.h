@@ -5,6 +5,7 @@
 #else
 #include <semaphore.h>
 #endif
+#include <stdint.h>
 
 // Define Semaphore Struct
 typedef struct _semaphore {
