@@ -481,6 +481,7 @@ int rem_lf(char *path) {
     return res;
 }
 
+// TODO: Verify occasional Segmentation Fault when renaming file from external machine
 
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
@@ -725,6 +726,8 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
 
             } else { // The names are different, my entry has been removed
                 printf("I'm removing %s\n", node->file->name);
+
+                if (current->next == node) current->next = current->next->next;
 
                 char* name = (char *) malloc(sizeof(char) * (strlen(node->file->name) + 1));
                 strcpy(name, node->file->name);

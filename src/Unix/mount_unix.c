@@ -41,6 +41,7 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
 
     if (file->isDir) {
 
+        stbuf->st_size = 0;
         stbuf->st_uid = mount_uid; // The owner of the file/directory is the user who mounted the filesystem
         stbuf->st_gid = mount_gid; // The group of the file/directory is the same as the group of the user who mounted the filesystem
         stbuf->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
