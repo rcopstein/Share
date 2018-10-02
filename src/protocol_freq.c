@@ -158,7 +158,7 @@ void handle_freq_del(char* path, int socket) {
     free(filepath);
 
     if (res < 0) { res = -errno; goto END; }
-    rem_lf(path);
+    else if (!(res = rem_lf(path))) inc_lhier_seq_num();
 
     END:
 
