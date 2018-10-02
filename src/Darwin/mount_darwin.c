@@ -253,19 +253,6 @@ static int loopback_fgetattr(const char *path, struct stat *stbuf, struct fuse_f
     return 0;
 }
 
-static int loopback_statfs(const char *path, struct statvfs *stbuf)
-{
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
-
-    char* realpath = resolve_path(file);
-    int res = statvfs(realpath, stbuf);
-    free(realpath);
-
-    if (res == -1) return -errno;
-    return 0;
-}
-
 static int loopback_flush(const char *path, struct fuse_file_info *fi)
 {
     int res;
@@ -286,6 +273,45 @@ static int loopback_release(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
+static int loopback_getxtimes(const char *npath, struct timespec *bkuptime, struct timespec *crtime)
+{
+    LogicalFile* lf = get_lf((char *) npath); // Find File
+    if (lf == NULL) return -ENOENT;
+
+    char* path = resolve_path(lf);
+
+    int res = 0;
+    struct attrlist attributes;
+
+    attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
+    attributes.reserved    = 0;
+    attributes.commonattr  = 0;
+    attributes.dirattr     = 0;
+    attributes.fileattr    = 0;
+    attributes.forkattr    = 0;
+    attributes.volattr     = 0;
+
+    struct xtimeattrbuf {
+        uint32_t size;
+        struct timespec xtime;
+    } __attribute__ ((packed));
+
+    struct xtimeattrbuf buf;
+
+    attributes.commonattr = ATTR_CMN_BKUPTIME;
+    res = getattrlist(path, &attributes, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    if (res == 0) (void)memcpy(bkuptime, &(buf.xtime), sizeof(struct timespec));
+    else (void)memset(bkuptime, 0, sizeof(struct timespec));
+
+    attributes.commonattr = ATTR_CMN_CRTIME;
+    res = getattrlist(path, &attributes, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    if (res == 0) (void)memcpy(crtime, &(buf.xtime), sizeof(struct timespec));
+    else (void)memset(crtime, 0, sizeof(struct timespec));
+
+    free(path);
+    return 0;
+}
+
 void *loopback_init(struct fuse_conn_info *conn)
 {
     FUSE_ENABLE_SETVOLNAME(conn);
@@ -303,6 +329,7 @@ void loopback_destroy(void *userdata)
 static struct fuse_operations loopback_oper = {
         .init        = loopback_init,
         .destroy     = loopback_destroy,
+        .getxtimes   = loopback_getxtimes,
         .getattr     = loopback_getattr,
         .fgetattr    = loopback_fgetattr,
         .readdir     = loopback_readdir,
@@ -314,7 +341,6 @@ static struct fuse_operations loopback_oper = {
         .open        = loopback_open,
         .read        = loopback_read,
         .write       = loopback_write,
-        .statfs      = loopback_statfs,
         .flush       = loopback_flush,
         .release     = loopback_release,
         .truncate    = loopback_truncate,

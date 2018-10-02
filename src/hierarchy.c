@@ -238,9 +238,6 @@ static HierarchyNode* find_in_level(HierarchyNode* level, char* name, char* owne
 }
 static void rem_beneath(HierarchyNode* parent, char* name, char* owner) {
 
-    print_tree(0, root.child);
-    printf("\n");
-
     HierarchyNode* aux = parent->child;
     while (aux != NULL) {
         if (strcmp(aux->file->name, name) == 0) {
@@ -255,6 +252,7 @@ static void rem_beneath(HierarchyNode* parent, char* name, char* owner) {
 
     if (aux != NULL) hn_rem(aux);
     print_tree(0, root.child);
+    printf("\n");
 }
 static HierarchyNode* get_node(char *path) {
 
@@ -484,6 +482,9 @@ int rem_lf(char *path) {
     return res;
 }
 
+// TODO:
+// I need to rethink the sync algorithm because when a folder gets emptied by a process the sync doesn't show that
+// I will need something smarter to tell when the definition of a file is missing from the sync...
 
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
