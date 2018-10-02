@@ -56,6 +56,9 @@ static HierarchyNode root = { .file = &root_f, .parent = NULL, .child = NULL, .n
 // Auxiliar Functions
 char* resolve_path(LogicalFile* file) {
 
+    if (file == NULL) return NULL;
+    if (file->isDir) return NULL;
+
     member* current = get_current_member();
 
     size_t size = strlen(file->realpath);
