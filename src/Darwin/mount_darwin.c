@@ -289,7 +289,7 @@ static int loopback_release(const char *path, struct fuse_file_info *fi)
 void *loopback_init(struct fuse_conn_info *conn)
 {
     FUSE_ENABLE_SETVOLNAME(conn);
-    FUSE_ENABLE_XTIMES(conn);
+    // FUSE_ENABLE_XTIMES(conn);
     FUSE_ENABLE_CASE_INSENSITIVE(conn);
 
     return NULL;

@@ -103,7 +103,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     do {
 
         struct timespec start;
-        clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+        clock_gettime(CLOCK_REALTIME, &start);
 
         nname = (char *) malloc(sizeof(char) * 32);
         sprintf(nname, "%lu", start.tv_nsec);
