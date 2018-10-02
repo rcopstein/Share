@@ -36,13 +36,6 @@
 #include "output.h"
 #include "protocol_freq.h"
 
-#if defined(_POSIX_C_SOURCE)
-typedef unsigned char  u_char;
-typedef unsigned short u_short;
-typedef unsigned int   u_int;
-typedef unsigned long  u_long;
-#endif
-
 #define G_PREFIX                       "org"
 #define G_KAUTH_FILESEC_XATTR G_PREFIX ".apple.system.Security"
 #define A_PREFIX                       "com"
@@ -50,7 +43,6 @@ typedef unsigned long  u_long;
 #define XATTR_APPLE_PREFIX             "com.apple."
 
 // Variables
-char buffer[256];
 
 uid_t mount_uid;
 gid_t mount_gid;
@@ -261,25 +253,16 @@ static int loopback_fgetattr(const char *path, struct stat *stbuf, struct fuse_f
     return 0;
 }
 
-static int loopback_link(const char *from, const char *to)
-{
-    int res;
-
-    res = link(from, to);
-    if (res == -1) {
-        return -errno;
-    }
-
-    return 0;
-}
-
 static int loopback_statfs(const char *path, struct statvfs *stbuf)
 {
-    int res;
+    LogicalFile* file = get_lf((char *) path);
+    if (file == NULL) return -ENOENT;
 
-    res = statvfs(path, stbuf);
+    char* realpath = resolve_path(file);
+    int res = statvfs(realpath, stbuf);
+    free(realpath);
+
     if (res == -1) return -errno;
-
     return 0;
 }
 
@@ -294,8 +277,7 @@ static int loopback_flush(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-static int
-loopback_release(const char *path, struct fuse_file_info *fi)
+static int loopback_release(const char *path, struct fuse_file_info *fi)
 {
     (void)path;
 
@@ -304,8 +286,7 @@ loopback_release(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-void *
-loopback_init(struct fuse_conn_info *conn)
+void *loopback_init(struct fuse_conn_info *conn)
 {
     FUSE_ENABLE_SETVOLNAME(conn);
     FUSE_ENABLE_XTIMES(conn);
@@ -314,8 +295,7 @@ loopback_init(struct fuse_conn_info *conn)
     return NULL;
 }
 
-void
-loopback_destroy(void *userdata)
+void loopback_destroy(void *userdata)
 {
     /* nothing */
 }
@@ -330,7 +310,6 @@ static struct fuse_operations loopback_oper = {
         .unlink      = loopback_unlink,
         .rmdir       = loopback_rmdir,
         .rename      = loopback_rename,
-        .link        = loopback_link,
         .create      = loopback_create,
         .open        = loopback_open,
         .read        = loopback_read,
