@@ -310,14 +310,18 @@ int mount_dir(char* mp) {
     strcpy(mountpoint, mp);
 
     // Create Parameters
-    int num = 3;
+    int num = 5;
     int aux = num;
     char** list = malloc(sizeof(char*) * num);
 
+    char options[]    = "-o";
     char foreground[] = "-f";
+    char allowother[] = "allow_other";
 
     // First pointer is ignored, Second pointer is the path
 
+    list[--aux] = allowother;
+    list[--aux] = options;
     list[--aux] = foreground;
     list[--aux] = mountpoint;
     list[--aux] = mountpoint;
