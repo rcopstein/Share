@@ -1,6 +1,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 #include <sys/time.h>
 
 #include "protocol_freq.h"
