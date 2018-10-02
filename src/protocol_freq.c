@@ -1,6 +1,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/time.h>
 
 #include "protocol_freq.h"
 #include "hierarchy.h"
@@ -94,18 +95,30 @@ int send_freq_rep(int16_t response, int socket) {
 
 void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
+    int res;
+    LogicalFile* file;
+    char *npath, *nname;
     member* current = get_current_member();
 
-    LogicalFile* file = create_lf(false, name, current->id, name);
-    char* npath = resolve_path(file);
+    do {
 
-    printf("Creating at %s with size %zu\n", npath, strlen(npath));
+        struct timespec start;
+        clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 
-    // TODO: Attempt to recreate the file while result is EEXIST
+        nname = (char *) malloc(sizeof(char) * 32);
+        sprintf(nname, "%lu", start.tv_nsec);
 
-    become_user();
-    int res = open(npath, flags, 0755);
-    become_root();
+        file = create_lf(false, name, current->id, nname);
+        npath = resolve_path(file);
+
+        printf("Creating at %s with size %zu\n", npath, strlen(npath));
+
+        become_user();
+        res = open(npath, flags, 0755);
+        become_root();
+
+    }
+    while (res == EEXIST);
 
     if (res == -1) res = -errno;
     else {
@@ -114,6 +127,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     }
 
     free(npath);
+    free(nname);
     send_freq_rep((int16_t) res, socket);
 
     printf("Response for FREQ ADD was %d\n", res);

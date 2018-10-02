@@ -481,7 +481,6 @@ int rem_lf(char *path) {
     return res;
 }
 
-// TODO: Verify occasional Segmentation Fault when renaming file from external machine
 
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
