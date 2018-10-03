@@ -100,8 +100,6 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
 
     } else result = error("Failed to acquire lock!\n", NULL);
 
-    printf("!THIS IS IT '%s'\n", buffer);
-
     fclose(file);
     return result;
 
@@ -113,12 +111,12 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
 
     FILE* file = fopen(filename, "r+");
     if (file == NULL) { printf("Error is %d\n", errno); return error("Failed to open file '%s'!\n", (char *) filename); }
-    if (lock_file(fileno(file), F_WRLCK)) { return error("Failed to acquire lock for '%s'!\n", (char *) filename); }
+    if (lock_file(fileno(file), F_WRLCK) < 0) { return error("Failed to acquire lock for '%s'!\n", (char *) filename); }
 
     char* tempPath = "temp";
     FILE* tempFile = fopen(tempPath, "w+");
     if (tempFile == NULL) { fclose(file); return error("Failed to create a temporary file!\n", NULL); }
-    if (lock_file(fileno(file), F_RDLCK)) { fclose(file); return error("Failed to acquire lock for temp file!\n", NULL); }
+    if (lock_file(fileno(file), F_WRLCK) < 0) { fclose(file); return error("Failed to acquire lock for temp file!\n", NULL); }
 
     bool flag;
     char* line;
