@@ -294,7 +294,7 @@ static void handle_sync_lhie_rep(char* message) {
     message += sizeof(uint16_t);
 
     // Read All Files
-    read_hierarchy_message(message);
+    read_hierarchy_message(clock, memb, message);
 
     memb->lhier_clock = clock;
     printf("%s's hierarchy sequence number is now %d\n", id, clock);

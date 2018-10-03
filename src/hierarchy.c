@@ -12,6 +12,8 @@
 
 typedef struct _HierarchyNode {
 
+    uint16_t seq_num;
+
     int file_count;
     int folder_count;
     bool conflict_free;
@@ -149,10 +151,12 @@ static HierarchyNode* create_hn(LogicalFile* file) {
     result->conflict_free = true;
     result->folder_count = 0;
     result->file_count = 0;
-    result->child = NULL;
     result->parent = NULL;
+    result->child = NULL;
     result->prev = NULL;
     result->next = NULL;
+
+    result->seq_num = get_lhier_seq_num();
 
     return result;
 
@@ -486,6 +490,22 @@ int rem_lf(char *path) {
 // I need to rethink the sync algorithm because when a folder gets emptied by a process the sync doesn't show that
 // I will need something smarter to tell when the definition of a file is missing from the sync...
 
+// Cleanup (Remove metadata of files that got removed)
+static void cleanup(HierarchyNode* node, char* owner, uint16_t current_level) {
+
+    if (node == NULL) return;
+
+    cleanup(node->child, owner, current_level);
+    cleanup(node->next, owner, current_level);
+
+    if (owner == NULL || !strcmp(owner, node->file->owner)) {
+        if (node->seq_num < current_level || (node->file->isDir && node->file_count + node->folder_count == 0)) {
+            hn_rem(node);
+        }
+    }
+
+}
+
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
 
@@ -697,7 +717,7 @@ static LogicalFile* _read_logical_file(char** message) {
     return file;
 
 }
-static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* current, LogicalFile *file) {
+static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, HierarchyNode* current, LogicalFile *file) {
 
     if (file->isDir) {
         HierarchyNode* node = find_in_level(current->next, file->name, NULL);
@@ -717,6 +737,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
             if (node == NULL) { // This is a new entry for this owner
                 printf("%s is new!\n", file->name);
                 node = create_hn(file);
+                node->seq_num = sn;
                 check_conflict(parent->child, node);
                 if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
@@ -724,7 +745,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
                 printf("I already have %s\n", node->file->name);
-                // TODO: Update entry
+                node->seq_num = sn; // Update entry
                 return node;
 
             } else { // The names are different, my entry has been removed
@@ -741,7 +762,7 @@ static HierarchyNode* _sync_logical_file(HierarchyNode *parent, HierarchyNode* c
         }
     }
 }
-static void _read_hierarchy_message_entry(HierarchyNode* parent, uint16_t* level, char** message) {
+static void _read_hierarchy_message_entry(uint16_t sn, HierarchyNode* parent, uint16_t* level, char** message) {
 
     if (*level == 0) return;
 
@@ -753,20 +774,20 @@ static void _read_hierarchy_message_entry(HierarchyNode* parent, uint16_t* level
     do {
 
         LogicalFile* file = _read_logical_file(message);
-        current = _sync_logical_file(parent, current, file);
+        current = _sync_logical_file(sn, parent, current, file);
         free_lf(file);
 
         memcpy(&l, *message, sizeof(uint16_t));
         (*message) += sizeof(uint16_t);
 
-        if (l > *level) _read_hierarchy_message_entry(current, &l, message);
+        if (l > *level) _read_hierarchy_message_entry(sn, current, &l, message);
 
     }
     while (l == *level);
     *level = l;
 
 }
-void read_hierarchy_message(char* message) {
+void read_hierarchy_message(uint16_t sn, member* m, char* message) {
 
     // Read first level
     uint16_t level;
@@ -775,7 +796,10 @@ void read_hierarchy_message(char* message) {
     // Call recursive read of message
     char* aux = message + sizeof(uint16_t);
     HierarchyNode* node = &root;
-    _read_hierarchy_message_entry(node, &level, &aux);
+    _read_hierarchy_message_entry(sn, node, &level, &aux);
+
+    // Cleanup old files and empty folders
+    cleanup(root.child, m->id, sn);
 
     printf("\n");
     print_tree(0, root.child);
