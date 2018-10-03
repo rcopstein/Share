@@ -47,6 +47,7 @@ char* generate_member_id();
 void print_member(member* m);
 size_t size_of_member(member* m);
 
+member* get_random_member();
 member* get_current_member();
 member* get_certain_member(char* id);
 

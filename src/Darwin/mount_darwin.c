@@ -83,8 +83,6 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    // TODO: Check if I can free the names!
-
     int* conflicts;
     LogicalFile** list = list_lf((char *) path, &conflicts);
     if (list == NULL) return -ENOENT;
@@ -101,7 +99,7 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
             char* name = resolved_name(aux);
             filler(buf, name, NULL, 0);
-            //free(name);
+            free(name);
 
         } else {
 
@@ -109,7 +107,7 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             strcpy(name, aux->name);
 
             filler(buf, name, NULL, 0);
-            //free(name);
+            free(name);
 
         }
         ++count;
@@ -196,10 +194,8 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
     char* _name;
     split_path(_path, &_name);
 
-    // TODO: CHANGE THIS FOR SOMETHING SMARTER
-
-    member* current = get_current_member();
-    int res = send_freq_req_add(current, _path, _name, fi->flags);
+    member* assigned_owner = get_random_member();
+    int res = send_freq_req_add(assigned_owner, _path, _name, fi->flags);
 
     if (res > 0) { fi->fh = (uint64_t) res; res = 0; }
 

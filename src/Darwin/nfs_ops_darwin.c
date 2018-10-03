@@ -45,6 +45,8 @@ static char* _ip = NULL;
 static char* _path = NULL;
 static char* _add_nfs_recp(char* line) {
 
+    printf("I'm here!\n");
+
     char* preline = NULL;
 
     if (line == NULL) {

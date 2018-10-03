@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "fops.h"
 #include "nops.h"
@@ -415,6 +416,8 @@ int main(int argc, char** argv) {
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();
+
+    srand(time(NULL));
 
     // Read command
     char* command = argv[1];

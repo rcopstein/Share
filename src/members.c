@@ -27,6 +27,7 @@ typedef struct _mlist {
 // Variables
 static const char filepath[] = "metadata/members.txt";
 
+static int count = 0;
 static member* self = NULL;
 static mlist* members = NULL;
 static uint16_t child_count = 0;
@@ -91,6 +92,7 @@ int initialize_metadata_members(member *m) {
     free(line);
      */
 
+    count++;
     self = m;
     m->state = (uint16_t)(m->state | AVAIL);
 
@@ -150,6 +152,7 @@ void remove_member(char* id) {
             *aux = (*aux)->next;
             inc_member_clock();
             _free_member(m);
+            --count;
             return;
         }
         *aux = (*aux)->next;
@@ -167,9 +170,26 @@ void add_member(member* memb) {
     m->next = *head;
     *head = m;
 
+    ++count;
     start_background(n);
     inc_member_clock();
 
+}
+
+member* get_random_member() {
+
+    long m;
+    mlist* aux;
+
+    do {
+        aux = members;
+        m = random() % count;
+        if (m-- == 0) return self;
+        while (aux != NULL && m--) aux = aux->next;
+    }
+    while (aux == NULL);
+
+    return aux->content;
 }
 
 member* get_current_member() {
