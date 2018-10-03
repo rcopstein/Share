@@ -85,6 +85,7 @@ int check_nfs_recp(member* m, char* recipient) {
     int res = fops_read_line(exportsFile, path, buffer, 256);
 
     if (res) {
+        printf("Didn't find line starting with %s\n", path);
         free(buffer);
         return 1;
     }
@@ -94,9 +95,11 @@ int check_nfs_recp(member* m, char* recipient) {
     char* token = strsep(&aux, " ");
 
     while (token != NULL) {
-        if (!strcmp(token, recipient)) { found = true; break; }
+        if (!strncmp(token, recipient, strlen(recipient))) { found = true; break; }
         token = strsep(&aux, " ");
     }
+
+    printf("%s, Found: %d\n", token, found);
 
     free(buffer);
     if (found) return 0;
