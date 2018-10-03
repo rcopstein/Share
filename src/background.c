@@ -101,7 +101,7 @@ static void* loop(void* _bg) {
 
         check_connection(m);
         check_mount(m);
-        sleep(2); // TODO: Change this to 10
+        sleep(10);
 
     }
 
