@@ -70,13 +70,14 @@ static char* _add_nfs_recp(char* line) {
         line = preline;
     }
 
-    size_t size = strlen(line) - 2; // Minus placeholder
+    size_t size = strlen(line);
     if (line[size-1] == '\n') line[--size] = '\0';
 
     size += num_chars(get_uid()) - 2; // UID minus placeholder
     size += num_chars(get_gid()) - 2; // GID minus placeholder
     size += strlen(_ip) - 2; // IP minus placeholder
     size += strlen(options); // Line Template
+    size -= 2; // Minus Line Placeholder
     size += 1; // Line Terminator
 
     char* nline = (char *) malloc(size * sizeof(char));
