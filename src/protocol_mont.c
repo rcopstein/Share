@@ -94,13 +94,18 @@ void handle_mont_req(char *message) {
     if (!(m->state & RECP)) {
 
         // Add NFS recipient
-        if (add_nfs_recp(get_current_member(), m->ip)) {
+        ADD: if (add_nfs_recp(get_current_member(), m->ip)) {
             warning("Failed to add NFS recipient '%s'\n", m->ip);
             return;
         }
 
         member_set_state(m, RECP);
 
+    } else if (check_nfs_recp(get_current_member(), m->ip)) {
+
+        warning("Found inconsistent NFS recipient state. Attempting to fix!\n", NULL);
+        member_unset_state(m, MOUNT);
+        goto ADD;
     }
 
     send_mont_rep(m);

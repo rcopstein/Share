@@ -109,16 +109,14 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
 
 int fops_update_line(const char* filename, const char* prefix, char* (*funct)(char *)) {
 
-    printf(">> I'm currently %d\n", getuid());
-
     FILE* file = fopen(filename, "r+");
     if (file == NULL) { printf("Error is %d\n", errno); return error("Failed to open file '%s'!\n", (char *) filename); }
-    if (lock_file(fileno(file), F_WRLCK) < 0) return error("Failed to acquire lock for '%s'!\n", (char *) filename);
+    if (lock_file(fileno(file), F_WRLCK)) { return error("Failed to acquire lock for '%s'!\n", (char *) filename); }
 
     char* tempPath = "temp";
     FILE* tempFile = fopen(tempPath, "w+");
     if (tempFile == NULL) { fclose(file); return error("Failed to create a temporary file!\n", NULL); }
-    if (lock_file(fileno(tempFile), F_WRLCK) < 0) { fclose(file); return error("Failed to acquire lock for temp file!\n", NULL); }
+    if (lock_file(fileno(file), F_RDLCK)) { fclose(file); return error("Failed to acquire lock for temp file!\n", NULL); }
 
     bool flag;
     char* line;
@@ -160,14 +158,14 @@ int fops_update_line(const char* filename, const char* prefix, char* (*funct)(ch
         remove(tempPath);
     }
 
+    fflush(tempFile);
+    fflush(file);
+
     fclose(tempFile);
     fclose(file);
     free(buffer);
 
     return result;
-
-    // There is no call for unlocking on purpose. fcntl should release the lock automatically
-    // after the call for fclose.
 }
 
 int fops_remove_line(const char* filename, const char* prefix) {

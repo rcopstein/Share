@@ -94,6 +94,34 @@ int add_nfs_recp(member* m, char* recipient) {
     return update_nfs();
 }
 
+// Find NFS recipient
+int check_nfs_recp(member* m, char* recipient) {
+
+    size_t size;
+    char* path = build_nfs_path(m, &size);
+
+    char* buffer = (char *) malloc(sizeof(char) * 256); // Don't worry about it being small, it will get realloced if it doesn't fit
+    int res = fops_read_line(exportsFile, path, buffer, 256);
+
+    if (res) {
+        free(buffer);
+        return 1;
+    }
+
+    bool found = false;
+    char* aux = buffer;
+    char* token = strsep(&aux, " ");
+
+    while (token != NULL) {
+        if (!strcmp(token, recipient)) { found = true; break; }
+        token = strsep(&aux, " ");
+    }
+
+    free(buffer);
+    if (found) return 0;
+    return 1;
+}
+
 // Remove NFS recipient
 static char* _recp = NULL;
 static char* _remove_nfs_recp(char* line) {

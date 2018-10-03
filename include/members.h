@@ -5,9 +5,9 @@
 #include <stdint.h>
 #include <semaphores.h>
 
-#define AVAIL 0x00001
-#define MOUNT 0x00002
-#define RECP  0x00004
+#define AVAIL 0x00001 // Member Available
+#define MOUNT 0x00002 // NFS Mounted
+#define RECP  0x00004 // NFS Recipient
 
 // Define member struct
 typedef struct _member {
