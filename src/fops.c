@@ -100,6 +100,8 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
 
     } else result = error("Failed to acquire lock!\n", NULL);
 
+    printf("!THIS IS IT '%s'\n", buffer);
+
     fclose(file);
     return result;
 

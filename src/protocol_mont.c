@@ -100,6 +100,7 @@ void handle_mont_req(char *message) {
         }
 
         member_set_state(m, RECP);
+        printf("ADDED RECIPIENT '%s'\n", m->ip);
 
     } else if (check_nfs_recp(get_current_member(), m->ip)) {
 
