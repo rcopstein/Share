@@ -254,47 +254,7 @@ static int loopback_release(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-static int loopback_getxtimes(const char *npath, struct timespec *bkuptime, struct timespec *crtime)
-{
-    LogicalFile* lf = get_lf((char *) npath); // Find File
-    if (lf == NULL) return -ENOENT;
-
-    char* path = resolve_path(lf);
-
-    int res = 0;
-    struct attrlist attributes;
-
-    attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
-    attributes.reserved    = 0;
-    attributes.commonattr  = 0;
-    attributes.dirattr     = 0;
-    attributes.fileattr    = 0;
-    attributes.forkattr    = 0;
-    attributes.volattr     = 0;
-
-    struct xtimeattrbuf {
-        uint32_t size;
-        struct timespec xtime;
-    } __attribute__ ((packed));
-
-    struct xtimeattrbuf buf;
-
-    attributes.commonattr = ATTR_CMN_BKUPTIME;
-    res = getattrlist(path, &attributes, &buf, sizeof(buf), FSOPT_NOFOLLOW);
-    if (res == 0) (void)memcpy(bkuptime, &(buf.xtime), sizeof(struct timespec));
-    else (void)memset(bkuptime, 0, sizeof(struct timespec));
-
-    attributes.commonattr = ATTR_CMN_CRTIME;
-    res = getattrlist(path, &attributes, &buf, sizeof(buf), FSOPT_NOFOLLOW);
-    if (res == 0) (void)memcpy(crtime, &(buf.xtime), sizeof(struct timespec));
-    else (void)memset(crtime, 0, sizeof(struct timespec));
-
-    free(path);
-    return 0;
-}
-
 static struct fuse_operations loopback_oper = {
-        .getxtimes   = loopback_getxtimes,
         .getattr     = loopback_getattr,
         .fgetattr    = loopback_fgetattr,
         .readdir     = loopback_readdir,
