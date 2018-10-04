@@ -128,7 +128,7 @@ static int loopback_mkdir(const char *path, mode_t mode)
     *lastsep = '\0';
 
     LogicalFile* lfolder = create_lf(true, lastsep + 1, "", "");
-    int result = add_lf(lfolder, _path);
+    int result = add_lf(lfolder, _path, false);
 
     free_lf(lfolder);
     free(_path);
@@ -367,20 +367,20 @@ int mount_dir(char* mp) {
     strcpy(mountpoint, mp);
 
     // Create Parameters
-    int num = 5;
+    int num = 6;
     int aux = num;
     char** list = malloc(sizeof(char*) * num);
 
-    char foreground[] = "-f";
-    // char debug[]      = "-d";
+    char sync[]       = "-s";
     char options[]    = "-o";
+    char foreground[] = "-f";
     char volname[]    = "volname=Shared\\ Folder,allow_other,noappledouble";
 
     // First pointer is ignored, Second pointer is the path
 
     list[--aux] = volname;
     list[--aux] = options;
-    //list[--aux] = debug;
+    list[--aux] = sync;
     list[--aux] = foreground;
     list[--aux] = mountpoint;
     list[--aux] = mountpoint;

@@ -258,13 +258,15 @@ static void rem_beneath(HierarchyNode* parent, char* name, char* owner) {
     print_tree(0, root.child);
     printf("\n");
 }
-static HierarchyNode* get_node(char *path) {
+static HierarchyNode* get_node(char *path, bool create) {
 
     char* _path = (char *) malloc(strlen(path) + 1);
     strcpy(_path, path);
     char* aux = _path;
 
+    HierarchyNode* parent = NULL;
     HierarchyNode* node = &root;
+
     char* sep = "/\n";
     char* token;
 
@@ -275,10 +277,18 @@ static HierarchyNode* get_node(char *path) {
         if (token == NULL) break;
         if (strlen(token) == 0) continue;
 
-        node = node->child;
-        node = find_in_level(node, token, NULL);
-        if (node == NULL) break;
+        parent = node;
+        node = find_in_level(node->child, token, NULL);
 
+        if (node == NULL) {
+            if (!create) break;
+            else {
+                LogicalFile* nfile = create_lf(true, token, NULL, NULL);
+                HierarchyNode* nnode = create_hn(nfile);
+                hn_add_child(parent, nnode, false);
+                node = nnode;
+            }
+        }
     }
 
     free(_path);
@@ -288,7 +298,7 @@ static HierarchyNode* get_node(char *path) {
 
 LogicalFile** list_lf(char* path, int** conflicts) {
 
-    HierarchyNode* folder = get_node(path);
+    HierarchyNode* folder = get_node(path, false);
     if (folder == NULL || !folder->file->isDir) return NULL;
 
     int count = folder->file_count;
@@ -383,16 +393,13 @@ int check_conflict(HierarchyNode* level, HierarchyNode* file) {
 
 
 // Public Management Operations
-int add_lf(LogicalFile *file, char *path) {
+int add_lf(LogicalFile *file, char *path, bool create) {
 
     char* hasAt = strchr(file->name, '@'); // Don't allow names with '@'
     if (hasAt != NULL) return -EINVAL;
 
-    HierarchyNode* parent = get_node(path);
+    HierarchyNode* parent = get_node(path, create);
     if (parent == NULL || !parent->file->isDir) return -ENOENT;
-
-    //if (file->isDir) parent->folder_count++;
-    //else parent->file_count++;
 
     HierarchyNode* node = create_hn(file);
     HierarchyNode* level = parent->child;
@@ -416,7 +423,7 @@ int ren_lf(char *path, char* new_name) {
     split_path(_path, &name);
     dissolve_name(name, &owner);
 
-    HierarchyNode* parent = get_node(_path);
+    HierarchyNode* parent = get_node(_path, false);
     if (parent == NULL || !parent->file->isDir) res = -ENOENT;
     else {
 
@@ -453,7 +460,7 @@ LogicalFile* get_lf(char *path) {
     dissolve_name(name, &owner);
 
     HierarchyNode* parent = &root;
-    if (_path != NULL && strlen(_path) > 0) parent = get_node(_path);
+    if (_path != NULL && strlen(_path) > 0) parent = get_node(_path, false);
 
     HierarchyNode* node = parent;
     if (parent != NULL && name != NULL && strlen(name) > 0) node = find_in_level(parent->child, name, owner);
@@ -474,7 +481,7 @@ int rem_lf(char *path) {
     split_path(_path, &name);
     dissolve_name(name, &owner);
 
-    HierarchyNode* parent = get_node(_path);
+    HierarchyNode* parent = get_node(_path, false);
     if (parent != NULL && parent->file->isDir) {
         rem_beneath(parent, name, owner);
         dissolve_conflict(parent->child, name);
@@ -486,9 +493,6 @@ int rem_lf(char *path) {
     return res;
 }
 
-// TODO:
-// I need to rethink the sync algorithm because when a folder gets emptied by a process the sync doesn't show that
-// I will need something smarter to tell when the definition of a file is missing from the sync...
 
 // Cleanup (Remove metadata of files that got removed)
 static void cleanup(HierarchyNode* node, char* owner, uint16_t current_level) {
@@ -498,13 +502,13 @@ static void cleanup(HierarchyNode* node, char* owner, uint16_t current_level) {
     cleanup(node->child, owner, current_level);
     cleanup(node->next, owner, current_level);
 
-    if (owner == NULL || !strcmp(owner, node->file->owner)) {
-        if (node->seq_num < current_level || (node->file->isDir && node->file_count + node->folder_count == 0)) {
-            hn_rem(node);
-        }
+    if ((node->file->isDir && node->file_count + node->folder_count == 0) ||
+        (!node->file->isDir && (owner == NULL || !strcmp(owner, node->file->owner)) && node->seq_num < current_level))
+    {
+        hn_rem(node);
     }
-
 }
+
 
 // Serialization
 size_t size_of_lf(LogicalFile* file) {
@@ -737,10 +741,14 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
             if (node == NULL) { // This is a new entry for this owner
                 printf("%s is new!\n", file->name);
                 node = create_hn(file);
+                printf("1 %s\n", node->file->name);
                 node->seq_num = sn;
+                printf("2 %s\n", node->file->name);
                 check_conflict(parent->child, node);
+                printf("3 %s\n", node->file->name);
                 if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
+                printf("4 %s\n", node->file->name);
                 return node;
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry

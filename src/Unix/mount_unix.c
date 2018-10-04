@@ -292,19 +292,21 @@ int mount_dir(char* mp) {
     strcpy(mountpoint, mp);
 
     // Create Parameters
-    int num = 3;
+    int num = 6;
     int aux = num;
     char** list = malloc(sizeof(char*) * num);
 
-    //char options[]    = "-o";
+    char sync[]       = "-s";
+    char options[]    = "-o";
     char foreground[] = "-f";
-    //char allowother[] = "allow_other";
+    char allowother[] = "allow_other";
 
     // First pointer is ignored, Second pointer is the path
 
-    //list[--aux] = allowother;
-    //list[--aux] = options;
+    list[--aux] = allowother;
+    list[--aux] = options;
     list[--aux] = foreground;
+    list[--aux] = sync;
     list[--aux] = mountpoint;
     list[--aux] = mountpoint;
 

@@ -68,7 +68,7 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
     if (result != NOPS_SUCCESS) { printf("Result sending message %d\n", result); goto END; }
 
     result = (int16_t) nops_read_message(socket, (void **) &message, &size);
-    if (result != NOPS_SUCCESS) { printf("Response from member %d\n", result); goto END; }
+    if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
     memcpy(&result, message, sizeof(int16_t));
 
@@ -123,7 +123,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
     if (res == -1) res = -errno;
     else {
-        if (add_lf(file, path)) { remove(npath); res = -ENOENT; }
+        if (add_lf(file, path, true)) { remove(npath); res = -ENOENT; }
         else inc_lhier_seq_num();
     }
 

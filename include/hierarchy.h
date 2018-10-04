@@ -35,7 +35,7 @@ void free_lf(LogicalFile* file);
 char* resolved_name(LogicalFile* file);
 
 // Public Management Operations
-int add_lf(LogicalFile *file, char *path);
+int add_lf(LogicalFile *file, char *path, bool create);
 int ren_lf(char* path, char* new_name);
 LogicalFile* get_lf(char *path);
 int rem_lf(char *path);

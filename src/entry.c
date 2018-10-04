@@ -122,52 +122,6 @@ int initialize(char* id, char* ip, uint16_t port) {
 }
 
 
-// Mount
-
-void add_sample_mount_info_1() {
-
-    LogicalFile* folder1 = create_lf(true, "Potatoes", "", "");
-    LogicalFile* file1  = create_lf(false, "potato.xlsx", "1", "Notas.xlsx");
-
-    LogicalFile* folder2 = create_lf(true, "Bananas", "", "");
-    LogicalFile* file2  = create_lf(false, "banana.doc", "1", "Notas.xlsx");
-
-    add_lf(folder1, "/");
-    add_lf(file1, "/Potatoes/");
-
-    add_lf(folder2, "/");
-    add_lf(file2, "/Bananas/");
-
-    free_lf(folder1);
-    free_lf(folder2);
-    free_lf(file1);
-    free_lf(file2);
-
-    inc_lhier_seq_num();
-}
-void add_sample_mount_info_2() {
-
-    LogicalFile* folder1 = create_lf(true, "Bananas", "", "");
-    LogicalFile* file1   = create_lf(false, "banana.doc", "1-1", "Notas.xlsx");
-
-    add_lf(folder1, "/");
-    add_lf(file1, "Bananas");
-
-    LogicalFile* folder2 = create_lf(true, "Peixes", "", "");
-    LogicalFile* file2   = create_lf(false, "carpas.docx", "1-1", "Notas.xlsx");
-
-    add_lf(folder2, "Bananas");
-    add_lf(file2, "Bananas/Peixes");
-
-    free_lf(folder1);
-    free_lf(folder2);
-    free_lf(file1);
-    free_lf(file2);
-
-    inc_lhier_seq_num();
-}
-
-
 // Create
 
 int clean_create(int level, char* nfs) {
