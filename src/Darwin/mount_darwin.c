@@ -51,7 +51,7 @@ gid_t mount_gid;
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
     LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    if (file == NULL) { error("Didn't find %s\n", (void *) path); return -ENOENT; }
 
     if (file->isDir) {
 
@@ -69,9 +69,9 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
 
         char* realpath = resolve_path(file);
         int result = lstat(realpath, stbuf);
-        free(realpath);
 
-        if (result == -1) return -errno;
+        if (result == -1) { error("Didn't find %s\n", (void *) path); free(realpath); return -errno; }
+        free(realpath);
 
 #if FUSE_VERSION >= 29
         stbuf->st_blksize = 0;

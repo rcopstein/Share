@@ -570,6 +570,8 @@ size_t serialize_file(char** buffer, LogicalFile* file) {
     memcpy(aux, file->name, sizeof(char) * name_size); // Copy name
     aux += sizeof(char) * name_size;
 
+    // printf("Serializing name: %s\n", file->name);
+
     memcpy(aux, &file->isDir, sizeof(uint8_t)); // Copy is directory
     aux += sizeof(uint8_t);
 
@@ -584,11 +586,15 @@ size_t serialize_file(char** buffer, LogicalFile* file) {
         memcpy(aux, file->owner, sizeof(char) * owner_size); // Copy owner
         aux += sizeof(char) * owner_size;
 
+        // printf("Serializing owner: %s\n", file->owner);
+
         memcpy(aux, &realpath_size, sizeof(uint16_t)); // Copy realpath size
         aux += sizeof(uint16_t);
 
         memcpy(aux, file->realpath, sizeof(char) * realpath_size); // Copy realpath
         //aux += sizeof(char) * realpath_size;
+
+        // printf("Serializing realpath: %s\n", file->realpath);
 
     }
 
@@ -612,6 +618,8 @@ int deserialize_file(char* buffer, LogicalFile** file) {
     name[size] = '\0';
     buffer += size;
 
+    // printf("Deserialized name: %s\n", name);
+
     memcpy(&(*file)->isDir, buffer, sizeof(uint8_t)); // Read is directory
     buffer += sizeof(uint8_t);
 
@@ -626,6 +634,8 @@ int deserialize_file(char* buffer, LogicalFile** file) {
         owner[size] = '\0';
         buffer += size;
 
+        // printf("Deserialized owner: %s\n", owner);
+
         memcpy(&size, buffer, sizeof(uint16_t)); // Read realpath size
         buffer += sizeof(uint16_t);
 
@@ -634,6 +644,8 @@ int deserialize_file(char* buffer, LogicalFile** file) {
         (*file)->realpath = realpath; // Assign realpath
         realpath[size] = '\0';
         //buffer += size;
+
+        // printf("Deserialized realpath: %s\n", realpath);
 
     } else {
         (*file)->owner = NULL;
@@ -747,6 +759,8 @@ static LogicalFile* _read_logical_file(char** message) {
     deserialize_file(*message, &file);
     (*message) += size_of_lf(file);
 
+    if (file->name[0] < '0' || file->name[0] > '9') warning("@ Deserialized File name is '%s'\n", file->name);
+
     return file;
 
 }
@@ -768,7 +782,7 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
             HierarchyNode *node = find_in_level(current->next, NULL, file->owner);
 
             if (node == NULL) { // This is a new entry for this owner
-                printf("%s is new!\n", file->name);
+                // printf("%s is new!\n", file->name);
                 node = create_hn(file);
                 node->seq_num = sn;
                 check_conflict(parent->child, node);
@@ -777,12 +791,12 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
                 return node;
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
-                printf("I already have %s\n", node->file->name);
+                // printf("I already have %s\n", node->file->name);
                 node->seq_num = sn; // Update entry
                 return node;
 
             } else { // The names are different, my entry has been removed
-                printf("I'm removing %s\n", node->file->name);
+                // printf("I'm removing %s\n", node->file->name);
 
                 if (current->next == node) current->next = current->next->next;
 
@@ -795,7 +809,7 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
         }
     }
 }
-static void _read_hierarchy_message_entry(uint16_t sn, HierarchyNode* parent, uint16_t* level, char** message) {
+static void _read_hierarchy_message_entry(uint16_t sn, HierarchyNode* parent, uint16_t* level, uint16_t* count, char** message) {
 
     if (*level == 0) return;
 
@@ -812,15 +826,16 @@ static void _read_hierarchy_message_entry(uint16_t sn, HierarchyNode* parent, ui
 
         memcpy(&l, *message, sizeof(uint16_t));
         (*message) += sizeof(uint16_t);
+        (*count)--;
 
-        if (l > *level) _read_hierarchy_message_entry(sn, current, &l, message);
+        if (l > *level) _read_hierarchy_message_entry(sn, current, &l, count, message);
 
     }
     while (l == *level);
     *level = l;
 
 }
-void read_hierarchy_message(uint16_t sn, member* m, char* message) {
+void read_hierarchy_message(uint16_t sn, member* m, uint16_t count, char* message) {
 
     // Read first level
     uint16_t level;
@@ -829,10 +844,12 @@ void read_hierarchy_message(uint16_t sn, member* m, char* message) {
     // Call recursive read of message
     char* aux = message + sizeof(uint16_t);
     HierarchyNode* node = &root;
-    _read_hierarchy_message_entry(sn, node, &level, &aux);
+    _read_hierarchy_message_entry(sn, node, &level, &count, &aux);
 
     // Cleanup old files and empty folders
     cleanup(root.child, m->id, sn);
+
+    printf("Count in the end was %d\n", count);
 
     // printf("\n");
     // print_tree(0, root.child);

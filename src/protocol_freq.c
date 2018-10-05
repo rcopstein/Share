@@ -137,16 +137,20 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
 
     printf("Received %s as response!\n", message);
 
-    if (strlen(message) == 0) {
+    if (message[0] == '\0') {
 
         result = -message[1];
 
     } else {
 
+        if (message[0] < '0' || message[0] > '9') {
+            warning("Suspect response for '%s'\n", message);
+        }
+
         LogicalFile* file = create_lf(false, name, m->id, message);
         char* resolved_path = resolve_path(file);
 
-        printf("Resolved path is %s\n", resolved_path);
+        // printf("Resolved path is %s\n", resolved_path);
 
         result = (int16_t) open(resolved_path, O_RDWR);
         free(resolved_path);
@@ -202,7 +206,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
         file = create_lf(false, name, current->id, nname);
         npath = resolve_path(file);
 
-        printf("Creating %s at %s with size %zu\n", name, npath, strlen(npath));
+        printf("Creating %s/%s at %s with size %zu\n", path, name, npath, strlen(npath));
 
         become_user();
         res = open(npath, flags, 0755);
@@ -213,8 +217,9 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
     if (res == -1) {
         res = -errno;
-        char send[2] = "\0";
-        send[1] = (char) errno;
+        char send[2];
+        send[0] = '\0';
+        send[1] = (char) res;
         send_freq_rep_add("", 1, socket);
     }
     else {
@@ -226,7 +231,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     free(npath);
     free(nname);
 
-    printf("Response for FREQ ADD was %d\n", res);
+    // printf("Response for FREQ ADD was %d\n", res);
 }
 void handle_freq_ren(char* from, char* to, int socket) {
 
@@ -239,9 +244,11 @@ void handle_freq_ren(char* from, char* to, int socket) {
 
     send_freq_rep((int16_t) res, socket);
 
-    printf("Response for FREQ REN was %d\n", res);
+    // printf("Response for FREQ REN was %d\n", res);
 }
 void handle_freq_del(char* path, const char* ask_automatic, int socket) {
+
+    printf("Got asked to delete %s\n", path);
 
     int res = 0;
     bool automatic = *ask_automatic != 'n';
