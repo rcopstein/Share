@@ -83,6 +83,8 @@ void split_path(char* path, char** name) {
 void split_ext(char* name, char** extension) {
 
     *extension = strrchr(name, '.'); // Find the last occurrence of '.'
+    if (*extension == NULL) return;
+
     **extension = '\0';
     (*extension)++;
 
@@ -209,6 +211,8 @@ static void hn_add_child(HierarchyNode *parent, HierarchyNode *node, bool last) 
 }
 static void hn_rem(HierarchyNode* node) {
 
+    if (node == &root) return;
+
     if (node->prev != NULL) {
         if (node->next != NULL) node->next->prev = node->prev;
         node->prev->next = node->next;
@@ -222,7 +226,25 @@ static void hn_rem(HierarchyNode* node) {
         node->parent->child = node->next;
     }
 
+    HierarchyNode* parent = node;
+    while (parent->parent == NULL) parent = parent->prev;
+    parent = parent->parent;
+
+    if (node->file->isDir) parent->folder_count--;
+    else parent->file_count--;
+
     free_hn(node);
+
+}
+
+void rem_subtree(HierarchyNode *node) {
+
+    if (node == NULL) return;
+
+    rem_subtree(node->child);
+    rem_subtree(node->next);
+
+    hn_rem(node);
 
 }
 
@@ -240,23 +262,30 @@ static HierarchyNode* find_in_level(HierarchyNode* level, char* name, char* owne
     return NULL;
 
 }
-static void rem_beneath(HierarchyNode* parent, char* name, char* owner) {
+static void rem_beneath(HierarchyNode* level, char* name, char* owner, bool automatic) {
 
-    HierarchyNode* aux = parent->child;
+    HierarchyNode* aux = level->child;
     while (aux != NULL) {
         if (strcmp(aux->file->name, name) == 0) {
-            if (owner == NULL || strcmp(aux->file->owner, owner) == 0) {
-                if (aux->file->isDir) parent->folder_count--;
-                else parent->file_count--;
-                break;
-            }
+            if (owner == NULL || strcmp(aux->file->owner, owner) == 0) break;
         }
         aux = aux->next;
     }
 
-    if (aux != NULL) hn_rem(aux);
-    print_tree(0, root.child);
-    printf("\n");
+    HierarchyNode* par = NULL;
+
+    if (aux != NULL) {
+        par = aux->parent;
+        if (aux->file->isDir) rem_subtree(aux->child);
+        hn_rem(aux);
+    }
+
+    if (automatic && par != NULL && par->file->isDir) {
+        if (par->file_count + par->folder_count == 0) hn_rem(par);
+    }
+
+    // print_tree(0, root.child);
+    // printf("\n");
 }
 static HierarchyNode* get_node(char *path, bool create) {
 
@@ -471,7 +500,7 @@ LogicalFile* get_lf(char *path) {
     LogicalFile* res = node != NULL ? node->file : NULL;
     return res;
 }
-int rem_lf(char *path) {
+int rem_lf(char *path, bool automatic) {
 
     char* _path = (char *) malloc(strlen(path) + 1);
     strcpy(_path, path);
@@ -483,7 +512,7 @@ int rem_lf(char *path) {
 
     HierarchyNode* parent = get_node(_path, false);
     if (parent != NULL && parent->file->isDir) {
-        rem_beneath(parent, name, owner);
+        rem_beneath(parent, name, owner, automatic);
         dissolve_conflict(parent->child, name);
     } else res = -ENOENT;
 
@@ -727,7 +756,7 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
         HierarchyNode* node = find_in_level(current->next, file->name, NULL);
         if (node == NULL) {
             node = create_hn(file);
-            check_conflict(parent->child, node);
+            // check_conflict(parent->child, node);
             if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
             else hn_add_child(parent, node, false);
         }
@@ -741,14 +770,10 @@ static HierarchyNode* _sync_logical_file(uint16_t sn, HierarchyNode *parent, Hie
             if (node == NULL) { // This is a new entry for this owner
                 printf("%s is new!\n", file->name);
                 node = create_hn(file);
-                printf("1 %s\n", node->file->name);
                 node->seq_num = sn;
-                printf("2 %s\n", node->file->name);
                 check_conflict(parent->child, node);
-                printf("3 %s\n", node->file->name);
                 if (parent->child != NULL && current->file != NULL) hn_add_next(current, node); // Add next to the current
                 else hn_add_child(parent, node, false);
-                printf("4 %s\n", node->file->name);
                 return node;
 
             } else if (strcmp(file->name, node->file->name) == 0) { // I already have this entry
@@ -809,8 +834,8 @@ void read_hierarchy_message(uint16_t sn, member* m, char* message) {
     // Cleanup old files and empty folders
     cleanup(root.child, m->id, sn);
 
-    printf("\n");
-    print_tree(0, root.child);
-    printf("\n");
+    // printf("\n");
+    // print_tree(0, root.child);
+    // printf("\n");
 
 }

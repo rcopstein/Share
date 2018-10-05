@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <protocol_sync.h>
 
 #include "protocol_ping.h"
 #include "background.h"
@@ -76,6 +77,7 @@ static void check_connection(member* m) {
     // Check Reconnection
     if (!(m->state & AVAIL) && m->avail < 4) {
         member_set_state(m, AVAIL);
+        send_sync_req(m, SYNC_LHIE);
         printf("%s Reconnected!\n", m->id);
     }
 

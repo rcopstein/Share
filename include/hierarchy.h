@@ -38,7 +38,7 @@ char* resolved_name(LogicalFile* file);
 int add_lf(LogicalFile *file, char *path, bool create);
 int ren_lf(char* path, char* new_name);
 LogicalFile* get_lf(char *path);
-int rem_lf(char *path);
+int rem_lf(char *path, bool automatic);
 
 // Serialization
 size_t size_of_lf(LogicalFile* file);

@@ -366,6 +366,8 @@ int parse_join(int argc, char** argv) {
 
 // Main
 
+// TODO: Make function for recover
+
 int main(int argc, char** argv) {
 
     // Check for minimum number of arguments

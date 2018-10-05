@@ -83,6 +83,9 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
 
 static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+    (void) fi;
+    (void) offset;
+
     int* conflicts;
     LogicalFile** list = list_lf((char *) path, &conflicts);
     if (list == NULL) return -ENOENT;
@@ -121,6 +124,8 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int loopback_mkdir(const char *path, mode_t mode)
 {
+    (void) mode;
+
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path so we don't mess with params
     strcpy(_path, path);
 
@@ -139,7 +144,8 @@ static int loopback_mkdir(const char *path, mode_t mode)
 
 static int loopback_rmdir(const char *path)
 {
-    return rem_lf((char *) path);
+    printf("Removing directory %s\n", path);
+    return rem_lf((char *) path, false);
 }
 
 static int loopback_open(const char *path, struct fuse_file_info *fi)
@@ -158,6 +164,8 @@ static int loopback_open(const char *path, struct fuse_file_info *fi)
 
 static int loopback_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+    (void) path;
+
     ssize_t res = pread((int) fi->fh, buf, size, offset);
     if (res == -1) {
         res = -errno;
@@ -168,6 +176,8 @@ static int loopback_read(const char *path, char *buf, size_t size, off_t offset,
 
 static int loopback_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+    (void) path;
+
     ssize_t res = pwrite((int) fi->fh, buf, size, offset);
     if (res == -1) res = -errno;
     return (int) res;
@@ -188,6 +198,8 @@ static int loopback_rename(const char *from, const char *to)
 
 static int loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
+    (void) mode;
+
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path so we don't mess with params
     strcpy(_path, path);
 
@@ -218,6 +230,8 @@ static int loopback_truncate(const char *path, off_t size)
 
 static int loopback_unlink(const char *path)
 {
+    printf("Calling unlink for %s\n", path);
+
     LogicalFile* lf = get_lf((char *) path); // Find File
     if (lf == NULL) return -ENOENT;
 
@@ -235,7 +249,7 @@ static int loopback_fgetattr(const char *path, struct stat *stbuf, struct fuse_f
 
     (void)path;
 
-    res = fstat(fi->fh, stbuf);
+    res = fstat((int) fi->fh, stbuf);
 
 #if FUSE_VERSION >= 29
     // Fall back to global I/O size. See loopback_getattr().
@@ -255,7 +269,7 @@ static int loopback_flush(const char *path, struct fuse_file_info *fi)
 
     (void)path;
 
-    res = close(dup(fi->fh));
+    res = close(dup((int) fi->fh));
     if (res == -1) return -errno;
     return 0;
 }
@@ -264,7 +278,7 @@ static int loopback_release(const char *path, struct fuse_file_info *fi)
 {
     (void)path;
 
-    close(fi->fh);
+    close((int) fi->fh);
 
     return 0;
 }
@@ -319,6 +333,8 @@ void *loopback_init(struct fuse_conn_info *conn)
 
 void loopback_destroy(void *userdata)
 {
+    (void) userdata;
+
     /* nothing */
 }
 
