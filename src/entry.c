@@ -370,6 +370,24 @@ int parse_join(int argc, char** argv) {
 
 int main(int argc, char** argv) {
 
+    /*
+    LogicalFile* lf1 = create_lf(false, "a.txt", "1", "r.txt");
+    LogicalFile* lf2 = create_lf(false, "b.txt", "1", "r.txt");
+    LogicalFile* lf3 = create_lf(false, "c.txt", "1", "r.txt");
+
+    add_lf(lf1, "/A", true);
+    add_lf(lf2, "/B", true);
+    add_lf(lf3, "/C", true);
+
+    size_t size;
+    build_hierarchy_message(0, NULL, &size);
+    printf("Message size: %zu\n", size);
+    return 0;
+     */
+
+    test();
+    return 0;
+
     // Check for minimum number of arguments
     if (argc < 2) return usage();
 

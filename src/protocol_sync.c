@@ -222,6 +222,8 @@ static int send_lhie_sync_rep(member* memb) {
     char* message_complete = build_hierarchy_message(size, message, &size); // Append list of files
     free(message);
 
+    if (message_complete == NULL) return error("Failed to build message: No memory!\n", NULL);
+
     printf("# Sent Logical Hierarchy Sync Reply to %s\n", memb->id);
     return server_send(memb->ip, memb->port, message_complete, size);
 
@@ -288,13 +290,9 @@ static void handle_sync_lhie_rep(char* message) {
     memcpy(&clock, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
-    // Read Files Number
-    uint16_t number;
-    memcpy(&number, message, sizeof(uint16_t));
-    message += sizeof(uint16_t);
-
     // Read All Files
-    read_hierarchy_message(clock, memb, number, message);
+    uint16_t count;
+    read_hierarchy_message(clock, memb, &count, message);
 
     memb->lhier_clock = clock;
     printf("%s's hierarchy sequence number is now %d\n", id, clock);

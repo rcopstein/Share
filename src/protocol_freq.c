@@ -140,6 +140,7 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
     if (message[0] == '\0') {
 
         result = -message[1];
+        printf("FREQ Request ADD received error %d\n", result);
 
     } else {
 
@@ -150,12 +151,8 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
         LogicalFile* file = create_lf(false, name, m->id, message);
         char* resolved_path = resolve_path(file);
 
-        // printf("Resolved path is %s\n", resolved_path);
-
         result = (int16_t) open(resolved_path, O_RDWR);
         free(resolved_path);
-
-        //add_lf(file, path, false);
 
     }
 
@@ -191,11 +188,13 @@ int send_freq_rep_add(char* path, size_t _size, int socket) {
 void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
     int res;
-    LogicalFile* file;
     char *npath, *nname;
+    LogicalFile* file = NULL;
     member* current = get_current_member();
 
     do {
+
+        if (file != NULL) free(file);
 
         struct timespec start;
         clock_gettime(CLOCK_REALTIME, &start);
@@ -215,23 +214,21 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     }
     while (res == -1 && errno == EEXIST);
 
-    if (res == -1) {
-        res = -errno;
-        char send[2];
-        send[0] = '\0';
-        send[1] = (char) res;
-        send_freq_rep_add("", 1, socket);
-    }
+    char send[2];
+    send[0] = '\0';
+    send[1] = (char) -errno;
+
+    if (res == -1) send_freq_rep_add(send, 1, socket);
     else {
         close(res);
-        if (add_lf(file, path, true)) { remove(npath); res = -ENOENT; }
+        if (add_lf(file, path, true)) { remove(npath); res = -ENOENT; send_freq_rep_add(send, 1, socket); }
         else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), socket); }
     }
 
     free(npath);
     free(nname);
 
-    // printf("Response for FREQ ADD was %d\n", res);
+    printf("Response for FREQ ADD was %d\n", res);
 }
 void handle_freq_ren(char* from, char* to, int socket) {
 

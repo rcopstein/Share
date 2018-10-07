@@ -51,7 +51,7 @@ gid_t mount_gid;
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
     LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) { error("Didn't find %s\n", (void *) path); return -ENOENT; }
+    if (file == NULL) { /*error("Didn't find %s\n", (void *) path);*/ return -ENOENT; }
 
     if (file->isDir) {
 
