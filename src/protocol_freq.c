@@ -221,7 +221,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     if (res == -1) send_freq_rep_add(send, 1, socket);
     else {
         close(res);
-        if (add_lf(file, path, true)) { remove(npath); res = -ENOENT; send_freq_rep_add(send, 1, socket); }
+        if (_lf_add(file, path, true)) { remove(npath); res = -ENOENT; send_freq_rep_add(send, 1, socket); }
         else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), socket); }
     }
 
@@ -237,7 +237,7 @@ void handle_freq_ren(char* from, char* to, int socket) {
     char* name;
     split_path(to, &name);
     if (strncmp(from, to, strlen(to)) != 0) res = -EINVAL;
-    else if (!(res = ren_lf(from, name))) inc_lhier_seq_num();
+    else if (!(res = _lf_ren(from, name))) inc_lhier_seq_num();
 
     send_freq_rep((int16_t) res, socket);
 
@@ -250,8 +250,9 @@ void handle_freq_del(char* path, const char* ask_automatic, int socket) {
     int res = 0;
     bool automatic = *ask_automatic != 'n';
 
-    LogicalFile* file = get_lf(path);
-    if (file == NULL) { res = -ENOENT; goto END; }
+    LogicalFile* file;
+    int error = _lf_get(path, &file);
+    if (file == NULL) { res = -error; goto END; }
 
     char* filepath = resolve_path(file);
     res = remove(filepath);

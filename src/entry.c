@@ -380,7 +380,7 @@ int main(int argc, char** argv) {
     add_lf(lf3, "/C", true);
 
     size_t size;
-    build_hierarchy_message(0, NULL, &size);
+    _lf_build_message(0, NULL, &size);
     printf("Message size: %zu\n", size);
     return 0;
      */

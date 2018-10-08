@@ -219,7 +219,7 @@ static int send_lhie_sync_rep(member* memb) {
     memcpy(aux, current->id, current->id_size); // Copy ID
     //aux += current->id_size;
 
-    char* message_complete = build_hierarchy_message(size, message, &size); // Append list of files
+    char* message_complete = _lf_build_message(size, message, &size); // Append list of files
     free(message);
 
     if (message_complete == NULL) return error("Failed to build message: No memory!\n", NULL);
@@ -291,8 +291,7 @@ static void handle_sync_lhie_rep(char* message) {
     message += sizeof(uint16_t);
 
     // Read All Files
-    uint16_t count;
-    read_hierarchy_message(clock, memb, &count, message);
+    _lf_sync_message(message, memb->id);
 
     memb->lhier_clock = clock;
     printf("%s's hierarchy sequence number is now %d\n", id, clock);
