@@ -109,13 +109,15 @@ static void* loop(void* _bg) {
 
     // Unmount and remove recipient
     if (member_get_state(m, MOUNT)) {
-        printf("# Umounting %s\n", m->id);
+        printf("# Unmounting %s\n", m->id);
         unmount_nfs_dir(m);
+        printf("Here!\n");
     }
 
     if (member_get_state(m, RECP)) {
         printf("# Removing Recipient %s\n", m->id);
         remove_nfs_recp(get_current_member(), m->ip);
+        printf("Here2!\n");
     }
 
     printf("Stopped %s background!\n", m->id);
