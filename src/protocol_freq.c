@@ -135,8 +135,6 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
     result = (int16_t) nops_read_message(socket, (void **) &message, &size);
     if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
-    printf("Received %s as response!\n", message);
-
     if (message[0] == '\0') {
 
         result = -message[1];
@@ -234,10 +232,8 @@ void handle_freq_ren(char* from, char* to, int socket) {
 
     int res = 0;
 
-    char* name;
-    split_path(to, &name);
-    if (strncmp(from, to, strlen(to)) != 0) res = -EINVAL;
-    else if (!(res = _lf_ren(from, name))) inc_lhier_seq_num();
+    if (!(res = _lf_ren(from, to))) inc_lhier_seq_num();
+    else res *= -1;
 
     send_freq_rep((int16_t) res, socket);
 
@@ -259,7 +255,7 @@ void handle_freq_del(char* path, const char* ask_automatic, int socket) {
     free(filepath);
 
     if (res < 0) { res = -errno; goto END; }
-    else if (!(res = rem_lf(path, automatic))) inc_lhier_seq_num();
+    else if (!(res = _lf_rem(path, automatic))) inc_lhier_seq_num();
 
     END:
 

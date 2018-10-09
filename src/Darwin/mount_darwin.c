@@ -51,8 +51,8 @@ gid_t mount_gid;
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
     LogicalFile* file;
-    int error = _lf_get((char *) path, &file);
-    if (file == NULL) { /*error("Didn't find %s\n", (void *) path);*/ return -error; }
+    int err = _lf_get((char *) path, &file);
+    if (err != 0) { /*error("Didn't find %s\n", (void *) path);*/ return -err; }
 
     if (file->isDir) {
 
@@ -88,8 +88,9 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     (void) offset;
 
     int* conflicts;
-    LogicalFile** list = list_lf((char *) path, &conflicts);
-    if (list == NULL) return -ENOENT;
+    LogicalFile** list;
+    int err = _lf_list(path, &list, &conflicts);
+    if (err != 0) return -err;
 
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
@@ -134,7 +135,7 @@ static int loopback_mkdir(const char *path, mode_t mode)
     *lastsep = '\0';
 
     LogicalFile* lfolder = create_lf(true, lastsep + 1, "", "");
-    int result = add_lf(lfolder, _path, false);
+    int result = _lf_add(lfolder, _path, false);
 
     free_lf(lfolder);
     free(_path);
@@ -146,13 +147,14 @@ static int loopback_mkdir(const char *path, mode_t mode)
 static int loopback_rmdir(const char *path)
 {
     printf("Removing directory %s\n", path);
-    return rem_lf((char *) path, false);
+    return _lf_rem((char *) path, false) * -1;
 }
 
 static int loopback_open(const char *path, struct fuse_file_info *fi)
 {
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    LogicalFile* file;
+    int error = _lf_get((char *) path, &file);
+    if (error != 0) return -error;
 
     char* realpath = resolve_path(file);
     int fd = open(realpath, fi->flags);
@@ -186,8 +188,9 @@ static int loopback_write(const char *path, const char *buf, size_t size, off_t 
 
 static int loopback_rename(const char *from, const char *to)
 {
-    LogicalFile* lf = get_lf((char *) from); // Find File
-    if (lf == NULL) return -ENOENT;
+    LogicalFile* lf;
+    int error = _lf_get((char *) from, &lf); // Find File
+    if (error != 0) return -error;
 
     member* owner = get_certain_member(lf->owner); // Find Owner
     if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
@@ -218,8 +221,9 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
 
 static int loopback_truncate(const char *path, off_t size)
 {
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    LogicalFile* file;
+    int error = _lf_get((char *) path, &file);
+    if (error != 0) return -error;
 
     char* realpath = resolve_path(file);
     int result = truncate(realpath, size);
@@ -233,8 +237,9 @@ static int loopback_unlink(const char *path)
 {
     printf("Calling unlink for %s\n", path);
 
-    LogicalFile* lf = get_lf((char *) path); // Find File
-    if (lf == NULL) return -ENOENT;
+    LogicalFile* lf;
+    int error = _lf_get((char *) path, &lf); // Find File
+    if (error != 0) return -error;
 
     member* owner = get_certain_member(lf->owner); // Find Owner
     if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
@@ -286,8 +291,9 @@ static int loopback_release(const char *path, struct fuse_file_info *fi)
 
 static int loopback_getxtimes(const char *npath, struct timespec *bkuptime, struct timespec *crtime)
 {
-    LogicalFile* lf = get_lf((char *) npath); // Find File
-    if (lf == NULL) return -ENOENT;
+    LogicalFile* lf;
+    int error = _lf_get((char *) npath, &lf); // Find File
+    if (error != 0) return -error;
 
     char* path = resolve_path(lf);
 

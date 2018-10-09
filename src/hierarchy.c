@@ -53,11 +53,15 @@ uint16_t inc_lhier_seq_num() {
 
 
 // Variables
-static LogicalFile root_f = { .isDir = true, .name = "/" };
-static HierarchyNode root = { .file = &root_f, .parent = NULL, .child = NULL, .next = NULL, .prev = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
+static LogicalFile root_lf = { .isDir = true, .name = "/" };
+static HierarchyNode root_hn = { .file = &root_lf, .parent = NULL, .child = NULL, .next = NULL, .prev = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
+static HierarchyNode* root = &root_hn;
 
 
 // Auxiliary Functions
+bool empty_name(char* name) {
+    return name == NULL || strlen(name) == 0;
+}
 char* get_segment(char** path) {
 
     char* segment;
@@ -85,11 +89,18 @@ char* resolve_path(LogicalFile* file) {
 int empty_folder(HierarchyNode* file) {
     return file->file_count + file->folder_count == 0;
 }
-void split_path(char* path, char** name) {
+char* split_path(char* path, char** name) {
 
     *name = strrchr(path, '/'); // Find the last occurrence of '/'
-    **name = '\0';
-    (*name)++;
+    if (*name == NULL) {
+        *name = path;
+        return NULL;
+    }
+    else {
+        **name = '\0';
+        (*name)++;
+        return path;
+    }
 
 }
 void split_ext(char* name, char** extension) {
@@ -306,11 +317,11 @@ static int _hn_get_path(HierarchyNode **result, const char *where) {
     strcpy(_where, where);
 
     char* name;
-    split_path(_where, &name);
+    _where = split_path(_where, &name);
 
     char* owner;
     dissolved_name(name, &owner);
-    int res = _hn_get_path_rec(&root, result, _where, name, owner);
+    int res = _hn_get_path_rec(root, result, _where, name, owner);
 
     free(_where);
     free(owner);
@@ -387,7 +398,7 @@ int _lf_add(LogicalFile* what, const char* where, bool create) {
     strcpy(_where, where);
 
     LogicalFile* _what = copy_lf(what);
-    int res = _lf_add_rec(&root, what, _where, create);
+    int res = _lf_add_rec(root, what, _where, create);
 
     if (res) free(_what);
     free(_where);
@@ -427,11 +438,11 @@ int _lf_rem(const char* where, bool remove_empty) {
     strcpy(_where, where);
 
     char* name;
-    split_path(_where, &name);
+    _where = split_path(_where, &name);
 
     char* owner;
     dissolved_name(name, &owner);
-    int res = _lf_rem_rec(&root, _where, name, owner, remove_empty);
+    int res = _lf_rem_rec(root, _where, name, owner, remove_empty);
 
     free(_where);
     free(owner);
@@ -468,18 +479,34 @@ static int _lf_ren_rec(HierarchyNode* parent, char* where, char* what, char* ren
     }
 
 }
-int _lf_ren(char* from, char* to) {
+int _lf_ren(const char* from, const char* to) {
+
+    char* _from = (char *) malloc(strlen(from) + 1);
+    strcpy(_from, from);
+
+    char* _to = (char *) malloc(strlen(to) + 1);
+    strcpy(_to, to);
 
     char *what, *rename;
-    split_path(from, &what);
-    split_path(to, &rename);
+    _from = split_path(_from, &what);
+    _to = split_path(_to, &rename);
 
-    if (strcmp(from, to) != 0) return EINVAL;
-    return _lf_ren_rec(&root, from, what, rename);
+    int res;
+    if (strcmp(_from, _to) != 0) res = EINVAL;
+    else res = _lf_ren_rec(root, _from, what, rename);
 
+    free(_from);
+    free(_to);
+
+    return res;
 }
 
 int _lf_get(const char* where, LogicalFile** result) {
+
+    if (!strcmp(where, "/")) {
+        *result = root->file;
+        return 0;
+    }
 
     HierarchyNode* parent;
     int res = _hn_get_path(&parent, where);
@@ -487,7 +514,47 @@ int _lf_get(const char* where, LogicalFile** result) {
     return res;
 
 }
+int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
 
+    char* _where = (char *) malloc(strlen(where) + 1);
+    strcpy(_where, where);
+    char* aux = _where;
+
+    HierarchyNode** node = &root;
+    char* token = get_segment(&aux);
+    int res = 0;
+
+    while (token != NULL) {
+        node = _hn_get(&(*node)->child, token, NULL);
+        if (*node == NULL) { res = ENOENT; break; }
+        token = get_segment(&aux);
+    }
+
+    *files = NULL;
+    *conflicts = NULL;
+
+    if (*node != NULL) {
+        int quant = (*node)->file_count + (*node)->folder_count;
+        node = &(*node)->child;
+
+        *conflicts = (int *) malloc(sizeof(int) * (quant + 1));
+        *files = (LogicalFile **) malloc(sizeof(LogicalFile *) * (quant + 1));
+
+        int i;
+        for (i = 0; i < quant; ++i) {
+            member* m = get_certain_member((*node)->file->owner);
+            if (m == NULL || member_get_state(m, AVAIL)) {
+                (*conflicts)[i] = (*node)->conflict_free ? 0 : 1;
+                (*files)[i] = (*node)->file;
+            } else --i;
+            node = &(*node)->next;
+        }
+        (*files)[i] = NULL;
+    }
+
+    free(_where);
+    return res;
+}
 
 // Serialization
 size_t _lf_size(LogicalFile *file) {
@@ -666,13 +733,13 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
 
         HierarchyNode* to_free = *current;
         _hn_rem(parent, current);
-        _lf_conf_rem(parent, (*current)->file->name);
+        _lf_conf_rem(parent, to_free->file->name);
         free_hn(to_free);
         return -1;
     }
 
 }
-static int _lf_sync_level(HierarchyNode* parent, char** message, int level, uint16_t seq_num) {
+static int _lf_sync_level(HierarchyNode* parent, char** message, char* owner, int level, uint16_t seq_num) {
 
     if (level == 0) return 0;
 
@@ -699,7 +766,7 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, int level, uint
         else {
             do {
 
-                if (*current != NULL) current = _hn_get(current, NULL, (*current)->file->owner);
+                if (*current != NULL) current = _hn_get(current, NULL, owner);
                 res = _lf_sync_files(parent, current, file, seq_num);
                 if (res != -1) current = &(*current)->next;
 
@@ -710,7 +777,7 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, int level, uint
         memcpy(&cur_level, *message, sizeof(uint16_t));
         *message += sizeof(uint16_t);
 
-        if (cur_level > level) cur_level = _lf_sync_level(*next, message, cur_level, seq_num);
+        if (cur_level > level) cur_level = _lf_sync_level(*next, message, owner, cur_level, seq_num);
 
     }
     while (cur_level == level);
@@ -723,9 +790,10 @@ void _lf_sync_message(char* message, char* from) {
     memcpy(&level, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
-    _lf_sync_level(&root, &message, level, seq_num);
-    cleanup(&root, &root.child, from, seq_num);
+    _lf_sync_level(root, &message, from, level, seq_num);
+    cleanup(root, &root->child, from, seq_num);
 
+    print_tree(0, root);
 }
 
 static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, size_t* message_size, HierarchyNode* node) {
@@ -739,7 +807,9 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
 
     // Determine if it should write
     bool should_write = false;
-    if (!node->file->isDir) should_write = true;
+    if (!node->file->isDir) {
+        should_write = strcmp(node->file->owner, get_current_member()->id) == 0; // Write files that belong to me!
+    }
     else {
         size_t result = copy_member_buffer((uint16_t)(level + 1), buffer, new_offset, message_size, node->child);
         if (result > new_offset) { res_offset = new_offset = result; should_write = true; }
@@ -796,7 +866,7 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
     offset += sizeof(seq_num);
 
     // Copy Files/Folders into buffer
-    *size = copy_member_buffer(1, &message, offset, &message_size, root.child);
+    *size = copy_member_buffer(1, &message, offset, &message_size, root->child);
     if (*size == 0) { free(message); message = NULL; }
     else {
         memcpy(message + *size, &terminator, sizeof(uint16_t));
@@ -840,19 +910,19 @@ void test() {
     _lf_rem("/B/C/a.txt", true);
 
     _lf_sync_message(message1, "2");
-    print_tree(0, &root);
+    print_tree(0, root);
     printf("\n");
 
     _lf_add(file3, "/A/B/", true);
     _lf_add(file4, "/B/C/", true);
 
     _lf_sync_message(message2, "2");
-    print_tree(0, &root);
+    print_tree(0, root);
     printf("\n");
 
     char message3[] = "\1\0\0\0";
     _lf_sync_message(message3, "2");
-    print_tree(0, &root);
+    print_tree(0, root);
     printf("\n");
 
     // HierarchyNode* parent = NULL;

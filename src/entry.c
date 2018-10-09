@@ -383,10 +383,10 @@ int main(int argc, char** argv) {
     _lf_build_message(0, NULL, &size);
     printf("Message size: %zu\n", size);
     return 0;
-     */
 
     test();
     return 0;
+     */
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();

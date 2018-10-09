@@ -20,7 +20,7 @@ typedef struct _LogicalFile {
 
 // Auxiliar Functions
 char* resolve_path(LogicalFile* file);
-void split_path(char* path, char** name);
+char* split_path(char* path, char** name);
 
 // Sequence Number
 uint16_t get_lhier_seq_num();
@@ -38,7 +38,8 @@ char* resolved_name(LogicalFile* file);
 int _lf_add(LogicalFile* what, const char* where, bool create);
 int _lf_get(const char* where, LogicalFile** result);
 int _lf_rem(const char* where, bool remove_empty);
-int _lf_ren(char* from, char* to);
+int _lf_ren(const char* from, const char* to);
+int _lf_list(const char* where, LogicalFile*** files, int** conflicts);
 
 // File Serialization
 size_t _lf_size(LogicalFile *file);
