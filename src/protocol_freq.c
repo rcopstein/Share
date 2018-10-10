@@ -256,6 +256,7 @@ void handle_freq_del(char* path, const char* ask_automatic, int socket) {
 
     if (res < 0) { res = -errno; goto END; }
     else if (!(res = _lf_rem(path, automatic))) inc_lhier_seq_num();
+    else printf("RES was %d\n", res);
 
     END:
 

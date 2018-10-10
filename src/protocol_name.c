@@ -100,7 +100,6 @@ void handle_name_req(char *message) {
         error("Failed to send join reply!\n", NULL);
         fops_remove_dir(id);
         remove_member(m.id);
-        free_member(&m);
         return;
     }
 

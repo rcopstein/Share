@@ -540,16 +540,20 @@ int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
         *conflicts = (int *) malloc(sizeof(int) * (quant + 1));
         *files = (LogicalFile **) malloc(sizeof(LogicalFile *) * (quant + 1));
 
-        int i;
+        int i = 0;
+        int index = 0;
         for (i = 0; i < quant; ++i) {
-            member* m = get_certain_member((*node)->file->owner);
-            if (m == NULL || member_get_state(m, AVAIL)) {
-                (*conflicts)[i] = (*node)->conflict_free ? 0 : 1;
-                (*files)[i] = (*node)->file;
-            } else --i;
+            if (*node != NULL) {
+                member *m = get_certain_member((*node)->file->owner);
+                if (m == NULL || member_get_state(m, AVAIL)) {
+                    (*conflicts)[index] = (*node)->conflict_free ? 0 : 1;
+                    (*files)[index] = (*node)->file;
+                    ++index;
+                }
+            }
             node = &(*node)->next;
         }
-        (*files)[i] = NULL;
+        (*files)[index] = NULL;
     }
 
     free(_where);
@@ -687,6 +691,8 @@ static void cleanup(HierarchyNode* parent, HierarchyNode** current, char* owner,
 
     if (*current == NULL) return;
 
+    printf("Checking %s with seq_num %d. The new seq_num is %d\n", (*current)->file->name, (*current)->seq_num, seq_num);
+
     cleanup(*current, &(*current)->child, owner, seq_num);
     cleanup(parent, &(*current)->next, owner, seq_num);
 
@@ -714,6 +720,7 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
 
         if (_lf_conf_add(parent, file->name)) new->conflict_free = false;
         _hn_add(parent, current, new);
+        new->seq_num = seq_num;
         return 1;
     }
 
@@ -784,7 +791,7 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, char* owner, in
 
     return cur_level;
 }
-void _lf_sync_message(char* message, char* from) {
+void _lf_sync_message(char* message, char* from, uint16_t seq_num) {
 
     uint16_t level;
     memcpy(&level, message, sizeof(uint16_t));
@@ -883,50 +890,4 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
 
     // Return Result
     return message;
-}
-
-
-// Testing
-void test() {
-
-    member* self = build_member("1", "127.0.0.1", 4000, "/Users/rcopstein/Desktop/s1");
-    initialize_metadata_members(self);
-
-    LogicalFile* file1 = create_lf(false, "a.txt", "2", "a.txt");
-    LogicalFile* file2 = create_lf(false, "a.txt", "2", "b.txt");
-    LogicalFile* file3 = create_lf(false, "c.txt", "2", "c.txt");
-    LogicalFile* file4 = create_lf(false, "d.txt", "2", "d.txt");
-
-    _lf_add(file1, "/A/B/", true);
-    _lf_add(file2, "/B/C/", true);
-
-    size_t size;
-    char* message1 = _lf_build_message(0, NULL, &size);
-    inc_lhier_seq_num();
-    char* message2 = _lf_build_message(0, NULL, &size);
-    inc_lhier_seq_num();
-
-    _lf_rem("/A/B/a.txt", true);
-    _lf_rem("/B/C/a.txt", true);
-
-    _lf_sync_message(message1, "2");
-    print_tree(0, root);
-    printf("\n");
-
-    _lf_add(file3, "/A/B/", true);
-    _lf_add(file4, "/B/C/", true);
-
-    _lf_sync_message(message2, "2");
-    print_tree(0, root);
-    printf("\n");
-
-    char message3[] = "\1\0\0\0";
-    _lf_sync_message(message3, "2");
-    print_tree(0, root);
-    printf("\n");
-
-    // HierarchyNode* parent = NULL;
-    // _hn_get_path(&parent, "/B/B");
-    // _lf_sync_files(parent, &parent->child, file4, 10);
-
 }

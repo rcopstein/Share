@@ -286,15 +286,15 @@ static void handle_sync_lhie_rep(char* message) {
     printf("# Received Logical Hierarchy Sync Reply from %s\n", id);
 
     // Read Sequence Number
-    uint16_t clock;
-    memcpy(&clock, message, sizeof(uint16_t));
+    uint16_t seq_num;
+    memcpy(&seq_num, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
     // Read All Files
-    _lf_sync_message(message, memb->id);
+    _lf_sync_message(message, memb->id, seq_num);
 
-    memb->lhier_clock = clock;
-    printf("%s's hierarchy sequence number is now %d\n", id, clock);
+    memb->lhier_clock = seq_num;
+    printf("%s's hierarchy sequence number is now %d\n", id, seq_num);
 
     free(id);
 }

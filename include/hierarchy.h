@@ -47,7 +47,7 @@ size_t _lf_serialize(char **buffer, LogicalFile *file);
 size_t _lf_deserialize(char *buffer, LogicalFile **file);
 
 // File Synchronization
-void _lf_sync_message(char* message, char* from);
+void _lf_sync_message(char* message, char* from, uint16_t seq_num);
 char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size);
 
 void test();
