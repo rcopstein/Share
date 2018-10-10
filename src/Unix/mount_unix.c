@@ -12,7 +12,9 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
+#include <sys/attr.h>
 #include <sys/param.h>
+#include <sys/vnode.h>
 #include <pthread.h>
 #include <system.h>
 
@@ -36,8 +38,9 @@ gid_t mount_gid;
 // Functions
 static int loopback_getattr(const char *path, struct stat *stbuf)
 {
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    LogicalFile* file;
+    int err = _lf_get((char *) path, &file);
+    if (err != 0) { /*error("Didn't find %s\n", (void *) path);*/ return -err; }
 
     if (file->isDir) {
 
@@ -55,9 +58,9 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
 
         char* realpath = resolve_path(file);
         int result = lstat(realpath, stbuf);
-        free(realpath);
 
-        if (result == -1) return -errno;
+        if (result == -1) { error("Didn't find %s\n", (void *) path); free(realpath); return -errno; }
+        free(realpath);
 
 #if FUSE_VERSION >= 29
         stbuf->st_blksize = 0;
@@ -73,8 +76,9 @@ static int loopback_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     (void) offset;
 
     int* conflicts;
-    LogicalFile** list = list_lf((char *) path, &conflicts);
-    if (list == NULL) return -ENOENT;
+    LogicalFile** list;
+    int err = _lf_list(path, &list, &conflicts);
+    if (err != 0) return -err;
 
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
@@ -119,7 +123,7 @@ static int loopback_mkdir(const char *path, mode_t mode)
     *lastsep = '\0';
 
     LogicalFile* lfolder = create_lf(true, lastsep + 1, "", "");
-    int result = add_lf(lfolder, _path, false);
+    int result = _lf_add(lfolder, _path, false);
 
     free_lf(lfolder);
     free(_path);
@@ -128,15 +132,19 @@ static int loopback_mkdir(const char *path, mode_t mode)
     return 0;
 }
 
+/*
 static int loopback_rmdir(const char *path)
 {
-    return rem_lf((char *) path, false);
+    printf("Removing directory %s\n", path);
+    return _lf_rem((char *) path, false) * -1;
 }
+*/
 
 static int loopback_open(const char *path, struct fuse_file_info *fi)
 {
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    LogicalFile* file;
+    int error = _lf_get((char *) path, &file);
+    if (error != 0) return -error;
 
     char* realpath = resolve_path(file);
     int fd = open(realpath, fi->flags);
@@ -170,8 +178,9 @@ static int loopback_write(const char *path, const char *buf, size_t size, off_t 
 
 static int loopback_rename(const char *from, const char *to)
 {
-    LogicalFile* lf = get_lf((char *) from); // Find File
-    if (lf == NULL) return -ENOENT;
+    LogicalFile* lf;
+    int error = _lf_get((char *) from, &lf); // Find File
+    if (error != 0) return -error;
 
     member* owner = get_certain_member(lf->owner); // Find Owner
     if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
@@ -202,8 +211,9 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
 
 static int loopback_truncate(const char *path, off_t size)
 {
-    LogicalFile* file = get_lf((char *) path);
-    if (file == NULL) return -ENOENT;
+    LogicalFile* file;
+    int error = _lf_get((char *) path, &file);
+    if (error != 0) return -error;
 
     char* realpath = resolve_path(file);
     int result = truncate(realpath, size);
@@ -215,8 +225,11 @@ static int loopback_truncate(const char *path, off_t size)
 
 static int loopback_unlink(const char *path)
 {
-    LogicalFile* lf = get_lf((char *) path); // Find File
-    if (lf == NULL) return -ENOENT;
+    printf("Calling unlink for %s\n", path);
+
+    LogicalFile* lf;
+    int error = _lf_get((char *) path, &lf); // Find File
+    if (error != 0) return -error;
 
     member* owner = get_certain_member(lf->owner); // Find Owner
     if (owner == NULL || !(owner->state & AVAIL)) return -EINVAL;
@@ -229,6 +242,7 @@ static int loopback_unlink(const char *path)
 static int loopback_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 {
     int res;
+
     (void)path;
 
     res = fstat((int) fi->fh, stbuf);
@@ -238,13 +252,17 @@ static int loopback_fgetattr(const char *path, struct stat *stbuf, struct fuse_f
     stbuf->st_blksize = 0;
 #endif
 
-    if (res == -1) return -errno;
+    if (res == -1) {
+        return -errno;
+    }
+
     return 0;
 }
 
 static int loopback_flush(const char *path, struct fuse_file_info *fi)
 {
     int res;
+
     (void)path;
 
     res = close(dup((int) fi->fh));
@@ -267,7 +285,7 @@ static struct fuse_operations loopback_oper = {
         .readdir     = loopback_readdir,
         .mkdir       = loopback_mkdir,
         .unlink      = loopback_unlink,
-        .rmdir       = loopback_rmdir,
+        //.rmdir       = loopback_rmdir,
         .rename      = loopback_rename,
         .create      = loopback_create,
         .open        = loopback_open,
@@ -279,7 +297,7 @@ static struct fuse_operations loopback_oper = {
 
 #if FUSE_VERSION >= 29
 #if HAVE_FSETATTR_X
-.flag_nullpath_ok = 1,
+        .flag_nullpath_ok = 1,
         .flag_nopath = 1,
 #else
         .flag_nullpath_ok = 0,
@@ -310,11 +328,11 @@ int mount_dir(char* mp) {
     char sync[]       = "-s";
     char options[]    = "-o";
     char foreground[] = "-f";
-    char allowother[] = "allow_other";
+    char option_details[] = "allow_other";
 
     // First pointer is ignored, Second pointer is the path
 
-    list[--aux] = allowother;
+    list[--aux] = option_details;
     list[--aux] = options;
     list[--aux] = foreground;
     list[--aux] = sync;

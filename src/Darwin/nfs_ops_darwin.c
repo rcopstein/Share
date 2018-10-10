@@ -44,7 +44,7 @@ static char* _ip = NULL;
 static char* _path = NULL;
 static char* _add_nfs_recp(char* line) {
 
-    printf("I'm here!\n");
+    if (_ip == NULL || _path == NULL) return line;
 
     char* preline = NULL;
 
@@ -131,7 +131,7 @@ static char* _remove_nfs_recp(char* line) {
         token = strtok(NULL, " \n");
     }
 
-    if (count <= 2) {
+    if (count <= 3) {
         free(nline);
         return NULL;
     }
@@ -185,6 +185,7 @@ int unmount_nfs_dir(member* m) {
     printf("> %s\n", command);
 
     int result = system(command);
+
     free(command);
     free(path);
 

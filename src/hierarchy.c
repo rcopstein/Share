@@ -59,9 +59,6 @@ static HierarchyNode* root = &root_hn;
 
 
 // Auxiliary Functions
-bool empty_name(char* name) {
-    return name == NULL || strlen(name) == 0;
-}
 char* get_segment(char** path) {
 
     char* segment;

@@ -144,11 +144,13 @@ static int loopback_mkdir(const char *path, mode_t mode)
     return 0;
 }
 
+/*
 static int loopback_rmdir(const char *path)
 {
     printf("Removing directory %s\n", path);
     return _lf_rem((char *) path, false) * -1;
 }
+*/
 
 static int loopback_open(const char *path, struct fuse_file_info *fi)
 {
@@ -354,7 +356,7 @@ static struct fuse_operations loopback_oper = {
         .readdir     = loopback_readdir,
         .mkdir       = loopback_mkdir,
         .unlink      = loopback_unlink,
-        .rmdir       = loopback_rmdir,
+        //.rmdir       = loopback_rmdir,
         .rename      = loopback_rename,
         .create      = loopback_create,
         .open        = loopback_open,
@@ -397,14 +399,14 @@ int mount_dir(char* mp) {
     char sync[]       = "-s";
     char options[]    = "-o";
     char foreground[] = "-f";
-    char volname[]    = "volname=Shared\\ Folder,allow_other,noappledouble";
+    char option_details[] = "volname=Shared\\ Folder,allow_other,noappledouble";
 
     // First pointer is ignored, Second pointer is the path
 
-    list[--aux] = volname;
+    list[--aux] = option_details;
     list[--aux] = options;
-    list[--aux] = sync;
     list[--aux] = foreground;
+    list[--aux] = sync;
     list[--aux] = mountpoint;
     list[--aux] = mountpoint;
 
