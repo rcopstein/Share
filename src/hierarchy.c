@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <members.h>
 #include <ctype.h>
+#include <serialization.h>
 
 #include "output.h"
 #include "hierarchy.h"
@@ -20,10 +21,8 @@ typedef struct _HierarchyNode {
     bool conflict_free;
 
     LogicalFile* file;
-    struct _HierarchyNode* parent;
     struct _HierarchyNode* child;
     struct _HierarchyNode* next;
-    struct _HierarchyNode* prev;
 
 } HierarchyNode;
 
@@ -54,18 +53,63 @@ uint16_t inc_lhier_seq_num() {
 
 // Variables
 static LogicalFile root_lf = { .isDir = true, .name = "/" };
-static HierarchyNode root_hn = { .file = &root_lf, .parent = NULL, .child = NULL, .next = NULL, .prev = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
+static HierarchyNode root_hn = { .file = &root_lf, .child = NULL, .next = NULL, .folder_count = 0, .file_count = 0, .conflict_free = true };
 static HierarchyNode* root = &root_hn;
+static semaphore* access_sem = NULL;
 
 
 // Auxiliary Functions
-char* get_segment(char** path) {
+static char* get_segment(char** path) {
 
     char* segment;
     do { segment = strsep(path, "/"); } while (segment != NULL && !strlen(segment));
     return segment;
 
 }
+static int empty_folder(HierarchyNode* file) {
+    return file->file_count + file->folder_count == 0;
+}
+static void split_ext(char* name, char** extension) {
+
+    *extension = strrchr(name, '.'); // Find the last occurrence of '.'
+    if (*extension == NULL) return;
+
+    **extension = '\0';
+    (*extension)++;
+
+}
+static void print_tree(int level, HierarchyNode* root) {
+
+    if (root == NULL) return;
+    for (int i = 0; i < level; ++i) printf("\t");
+
+    if (root->conflict_free) printf("%s %s\n", root->file->name, root->file->owner);
+    else {
+        char* name = resolved_name(root->file);
+        printf("%s %s\n", name, root->file->owner);
+        free(name);
+    }
+
+    print_tree(level+1, root->child);
+    print_tree(level, root->next);
+
+}
+
+static void wait_semaphore() {
+
+    if (access_sem == NULL) {
+        access_sem = (semaphore *) malloc(sizeof(semaphore));
+        portable_sem_init(access_sem, 1);
+    }
+    portable_sem_wait(access_sem);
+
+}
+static void post_semaphore() {
+
+    if (access_sem != NULL) portable_sem_post(access_sem);
+
+}
+
 char* resolve_path(LogicalFile* file) {
 
     if (file == NULL) return NULL;
@@ -83,9 +127,6 @@ char* resolve_path(LogicalFile* file) {
 
     return result;
 }
-int empty_folder(HierarchyNode* file) {
-    return file->file_count + file->folder_count == 0;
-}
 char* split_path(char* path, char** name) {
 
     *name = strrchr(path, '/'); // Find the last occurrence of '/'
@@ -98,31 +139,6 @@ char* split_path(char* path, char** name) {
         (*name)++;
         return path;
     }
-
-}
-void split_ext(char* name, char** extension) {
-
-    *extension = strrchr(name, '.'); // Find the last occurrence of '.'
-    if (*extension == NULL) return;
-
-    **extension = '\0';
-    (*extension)++;
-
-}
-void print_tree(int level, HierarchyNode* root) {
-
-    if (root == NULL) return;
-    for (int i = 0; i < level; ++i) printf("\t");
-
-    if (root->conflict_free) printf("%s %s\n", root->file->name, root->file->owner);
-    else {
-        char* name = resolved_name(root->file);
-        printf("%s %s\n", name, root->file->owner);
-        free(name);
-    }
-
-    print_tree(level+1, root->child);
-    print_tree(level, root->next);
 
 }
 
@@ -231,9 +247,7 @@ static HierarchyNode* create_hn(LogicalFile* file) {
     result->conflict_free = true;
     result->folder_count = 0;
     result->file_count = 0;
-    result->parent = NULL;
     result->child = NULL;
-    result->prev = NULL;
     result->next = NULL;
 
     result->seq_num = get_lhier_seq_num();
@@ -395,7 +409,10 @@ int _lf_add(LogicalFile* what, const char* where, bool create) {
     strcpy(_where, where);
 
     LogicalFile* _what = copy_lf(what);
+
+    wait_semaphore();
     int res = _lf_add_rec(root, what, _where, create);
+    post_semaphore();
 
     if (res) free(_what);
     free(_where);
@@ -431,6 +448,7 @@ static int _lf_rem_rec(HierarchyNode* parent, char* where, char* what, char* own
 }
 int _lf_rem(const char* where, bool remove_empty) {
 
+
     char* _where = (char *) malloc(sizeof(char) * (strlen(where) + 1));
     strcpy(_where, where);
 
@@ -439,7 +457,10 @@ int _lf_rem(const char* where, bool remove_empty) {
 
     char* owner;
     dissolved_name(name, &owner);
+
+    wait_semaphore();
     int res = _lf_rem_rec(root, _where, name, owner, remove_empty);
+    post_semaphore();
 
     free(_where);
     free(owner);
@@ -490,7 +511,11 @@ int _lf_ren(const char* from, const char* to) {
 
     int res;
     if (strcmp(_from, _to) != 0) res = EINVAL;
-    else res = _lf_ren_rec(root, _from, what, rename);
+    else {
+        wait_semaphore();
+        res = _lf_ren_rec(root, _from, what, rename);
+        post_semaphore();
+    }
 
     free(_from);
     free(_to);
@@ -506,7 +531,11 @@ int _lf_get(const char* where, LogicalFile** result) {
     }
 
     HierarchyNode* parent;
+
+    wait_semaphore();
     int res = _hn_get_path(&parent, where);
+    post_semaphore();
+
     if (!res) *result = parent->file;
     return res;
 
@@ -520,6 +549,8 @@ int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
     HierarchyNode** node = &root;
     char* token = get_segment(&aux);
     int res = 0;
+
+    wait_semaphore();
 
     while (token != NULL) {
         node = _hn_get(&(*node)->child, token, NULL);
@@ -553,22 +584,22 @@ int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
         (*files)[index] = NULL;
     }
 
+    post_semaphore();
     free(_where);
     return res;
 }
+
 
 // Serialization
 size_t _lf_size(LogicalFile *file) {
 
     size_t size = 0;
     size += sizeof(uint8_t);
-    size += sizeof(uint16_t);
-    size += strlen(file->name);
+    size += sizeof_string(file->name);
 
     if (!file->isDir) {
-        size += strlen(file->realpath);
-        size += strlen(file->owner);
-        size += sizeof(uint16_t) * 2;
+        size += sizeof_string(file->realpath);
+        size += sizeof_string(file->owner);
     }
 
     return size;
@@ -578,68 +609,43 @@ size_t _lf_serialize(char **buffer, LogicalFile *file) {
 
     char* aux = *buffer;
     size_t size = _lf_size(file);
-    uint16_t name_size = (uint16_t) strlen(file->name);
 
     if (*buffer == NULL) *buffer = (char *) malloc(size);
 
-    memcpy(aux, &name_size, sizeof(uint16_t)); // Copy name size
-    aux += sizeof(uint16_t);
-
-    memcpy(aux, file->name, sizeof(char) * name_size); // Copy name
-    aux += sizeof(char) * name_size;
-
-    // printf("Serializing name: %s\n", file->name);
+    aux += serialize_string(aux, file->name, (uint16_t) strlen(file->name)); // Serialize Name
 
     memcpy(aux, &file->isDir, sizeof(uint8_t)); // Copy is directory
     aux += sizeof(uint8_t);
 
     if (!file->isDir) {
 
-        uint16_t owner_size = (uint16_t) strlen(file->owner);
-        uint16_t realpath_size = (uint16_t) strlen(file->realpath);
+        if (strlen(file->owner) == 0) {
+            printf("OOOps!\n");
+        }
 
-        memcpy(aux, &owner_size, sizeof(uint16_t)); // Copy owner size
-        aux += sizeof(uint16_t);
-
-        memcpy(aux, file->owner, sizeof(char) * owner_size); // Copy owner
-        aux += sizeof(char) * owner_size;
-
-        // printf("Serializing owner: %s\n", file->owner);
-
-        memcpy(aux, &realpath_size, sizeof(uint16_t)); // Copy realpath size
-        aux += sizeof(uint16_t);
-
-        memcpy(aux, file->realpath, sizeof(char) * realpath_size); // Copy realpath
-        //aux += sizeof(char) * realpath_size;
-
-        // printf("Serializing realpath: %s\n", file->realpath);
-
+        aux += serialize_string(aux, file->owner, (uint16_t) strlen(file->owner)); // Serialize Owner
+        aux += serialize_string(aux, file->realpath, (uint16_t) strlen(file->realpath)); // Serialize Realpath
     }
+
+    for (int i = 0; i < size; ++i) {
+        if (!isprint((*buffer)[i])) printf("\\%d", (*buffer)[i]);
+        else printf("%c", (*buffer)[i]);
+    }
+    printf("\n\n");
 
     return size;
 
 }
 size_t _lf_deserialize(char *buffer, LogicalFile **file) {
 
-    if (*file == NULL) {
-        *file = (LogicalFile *) malloc(sizeof(LogicalFile));
-    }
+    if (*file == NULL) *file = (LogicalFile *) malloc(sizeof(LogicalFile));
 
-    uint16_t size;
+    uint16_t size = 0;
     size_t total_size = 0;
 
-    memcpy(&size, buffer, sizeof(uint16_t)); // Read name size
-    total_size += sizeof(uint16_t);
-    buffer += sizeof(uint16_t);
-
-    char* name = (char *) malloc(sizeof(char) * (size + 1)); // Allocate name
-    memcpy(name, buffer, sizeof(char) * size); // Read name
-    (*file)->name = name; // Assign name
-    total_size += size;
-    name[size] = '\0';
+    size = deserialize_string(buffer, &(*file)->name);
+    total_size += size - sizeof(uint16_t);
     buffer += size;
-
-    // printf("Deserialized name: %s\n", name);
 
     memcpy(&(*file)->isDir, buffer, sizeof(uint8_t)); // Read is directory
     total_size += sizeof(uint8_t);
@@ -647,37 +653,20 @@ size_t _lf_deserialize(char *buffer, LogicalFile **file) {
 
     if (!(*file)->isDir) {
 
-        memcpy(&size, buffer, sizeof(uint16_t)); // Read owner size
-        total_size += sizeof(uint16_t);
-        buffer += sizeof(uint16_t);
-
-        char* owner = (char *) malloc(sizeof(char) * (size + 1)); // Allocate owner
-        memcpy(owner, buffer, size); // Read owner
-        (*file)->owner = owner; // Assign owner
-        total_size += size;
-        owner[size] = '\0';
+        size = deserialize_string(buffer, &(*file)->owner);
+        total_size += size - sizeof(uint16_t);
         buffer += size;
 
-        // printf("Deserialized owner: %s\n", owner);
-
-        memcpy(&size, buffer, sizeof(uint16_t)); // Read realpath size
-        total_size += sizeof(uint16_t);
-        buffer += sizeof(uint16_t);
-
-        char *realpath = (char *) malloc(sizeof(char) * (size + 1)); // Allocate realpath
-        memcpy(realpath, buffer, size); // Read realpath
-        (*file)->realpath = realpath; // Assign realpath
-        realpath[size] = '\0';
-        total_size += size;
-        //buffer += size;
-
-        // printf("Deserialized realpath: %s\n", realpath);
+        size = deserialize_string(buffer, &(*file)->realpath);
+        total_size += size - sizeof(uint16_t);
+        buffer += size;
 
     } else {
         (*file)->owner = NULL;
         (*file)->realpath = NULL;
     }
 
+    (*file)->num_links = 0;
     return total_size;
 
 }
@@ -688,7 +677,7 @@ static void cleanup(HierarchyNode* parent, HierarchyNode** current, char* owner,
 
     if (*current == NULL) return;
 
-    printf("Checking %s with seq_num %d. The new seq_num is %d\n", (*current)->file->name, (*current)->seq_num, seq_num);
+    // printf("Checking %s with seq_num %d. The new seq_num is %d\n", (*current)->file->name, (*current)->seq_num, seq_num);
 
     cleanup(*current, &(*current)->child, owner, seq_num);
     cleanup(parent, &(*current)->next, owner, seq_num);
@@ -711,7 +700,7 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     // The file is new to this node
     if (*current == NULL) {
 
-        printf("Added new file %s\n", file->name);
+        // printf("Added new file %s\n", file->name);
 
         HierarchyNode* new = create_hn(file);
 
@@ -724,7 +713,7 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     // The file already exists, must update it
     else if (file != NULL && !strcmp((*current)->file->name, file->name)) {
 
-        printf("Updated file %s\n", file->name);
+        // printf("Updated file %s\n", file->name);
 
         (*current)->seq_num = seq_num;
         return 0;
@@ -733,7 +722,7 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     // The current file doesn't exist anymore
     else {
 
-        printf("Removed file %s\n", (*current)->file->name);
+        // printf("Removed file %s\n", (*current)->file->name);
 
         HierarchyNode* to_free = *current;
         _hn_rem(parent, current);
@@ -757,8 +746,7 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, char* owner, in
 
         free(file);
         file = NULL;
-        size_t msg_size = _lf_deserialize(*message, &file);
-        *message += msg_size;
+        *message += _lf_deserialize(*message, &file);
 
         if (file->isDir) {
 
@@ -794,10 +782,12 @@ void _lf_sync_message(char* message, char* from, uint16_t seq_num) {
     memcpy(&level, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
+    wait_semaphore();
     _lf_sync_level(root, &message, from, level, seq_num);
     cleanup(root, &root->child, from, seq_num);
 
     print_tree(0, root);
+    post_semaphore();
 }
 
 static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, size_t* message_size, HierarchyNode* node) {
@@ -822,7 +812,7 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
 
     if (should_write) {
 
-        printf("Writing %s\n", node->file->name);
+        // printf("Writing %s\n", node->file->name);
 
         // In case this is the last file we write we will make sure there is at least enough space for another
         // uint16_t to hold the terminator. In practice, different entries will not leave a blank space between
@@ -837,8 +827,8 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
 
         char* where_to = *buffer + offset;
         memcpy(where_to, &level, sizeof(uint16_t));
-
         where_to += sizeof(uint16_t);
+
         _lf_serialize(&where_to, node->file);
 
         size_t result = copy_member_buffer(level, buffer, new_offset, message_size, node->next);
@@ -869,6 +859,8 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
     memcpy(message + offset, &seq_num, sizeof(seq_num));
     offset += sizeof(seq_num);
 
+    wait_semaphore();
+
     // Copy Files/Folders into buffer
     *size = copy_member_buffer(1, &message, offset, &message_size, root->child);
     if (*size == 0) { free(message); message = NULL; }
@@ -877,13 +869,17 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
         *size += sizeof(uint16_t);
 
         // Print Message
+        /*
         printf("\n");
         for (int i = 0; i < *size; ++i) {
             if (!isprint(message[i])) printf("\\%d", message[i]);
             else printf("%c", message[i]);
         }
         printf("\n\n");
+         */
     }
+
+    post_semaphore();
 
     // Return Result
     return message;

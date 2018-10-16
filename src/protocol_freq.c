@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
+#include <serialization.h>
 
 #include "protocol_freq.h"
 #include "hierarchy.h"
@@ -146,11 +147,15 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
             warning("Suspect response for '%s'\n", message);
         }
 
-        LogicalFile* file = create_lf(false, name, m->id, message);
+        char* response;
+        deserialize_string(message, &response);
+
+        LogicalFile* file = create_lf(false, name, m->id, response);
         char* resolved_path = resolve_path(file);
 
         result = (int16_t) open(resolved_path, O_RDWR);
         free(resolved_path);
+        free(response);
 
     }
 
@@ -176,23 +181,48 @@ int send_freq_rep(int16_t response, int socket) {
     return nops_send_message(socket, &response, sizeof(int16_t));
 
 }
-int send_freq_rep_add(char* path, size_t _size, int socket) {
+int send_freq_rep_add(char* path, size_t size, int error, int socket) {
 
-    size_t size = _size + 1;
-    return nops_send_message(socket, path, size);
+    if (error > 0) {
+
+        char err[2];
+        err[0] = '\0';
+        err[1] = (char) error;
+        return nops_send_message(socket, err, 2);
+
+    }
+
+    uint16_t serialized_size = sizeof_string(path);
+    char* send = (char *) malloc(serialized_size);
+    serialize_string(send, path, (uint16_t) strlen(path));
+
+    int res = nops_send_message(socket, send, serialized_size);
+    free(send);
+    return res;
 
 }
 
 void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
+    char* fullpath = (char *) malloc(strlen(path) + strlen(name) + 2);
+    sprintf(fullpath, "%s/%s", path, name);
+
+    LogicalFile* check = NULL;
+    int err = _lf_get(fullpath, &check);
+    free(fullpath);
+
+    if (err == 0 && check != NULL) err = EEXIST;
+    if (err != ENOENT) { send_freq_rep_add(NULL, 0, err, socket); return; }
+
     int res;
-    char *npath, *nname;
     LogicalFile* file = NULL;
+    char *npath = NULL, *nname = NULL;
     member* current = get_current_member();
 
     do {
 
         if (file != NULL) free(file);
+        if (nname != NULL) free(nname);
 
         struct timespec start;
         clock_gettime(CLOCK_REALTIME, &start);
@@ -212,21 +242,15 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
     }
     while (res == -1 && errno == EEXIST);
 
-    char send[2];
-    send[0] = '\0';
-    send[1] = (char) -errno;
-
-    if (res == -1) send_freq_rep_add(send, 1, socket);
+    if (res == -1) send_freq_rep_add(NULL, 0, errno, socket);
     else {
         close(res);
-        if (_lf_add(file, path, true)) { remove(npath); res = -ENOENT; send_freq_rep_add(send, 1, socket); }
-        else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), socket); }
+        if (_lf_add(file, path, true)) { remove(npath); send_freq_rep_add(NULL, 0, ENOENT, socket); }
+        else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), 0, socket); }
     }
 
     free(npath);
     free(nname);
-
-    printf("Response for FREQ ADD was %d\n", res);
 }
 void handle_freq_ren(char* from, char* to, int socket) {
 

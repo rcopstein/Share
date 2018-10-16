@@ -71,8 +71,11 @@ int add_nfs_recp(member* m, char* recipient) {
     _path = build_nfs_path(m, &size);
     _ip = recipient;
 
-    if (fops_update_line(exportsFile, _path, _add_nfs_recp)) return error("Failed to update line!\n", NULL);
+    int result = 0; // fops_update_line(exportsFile, _path, _add_nfs_recp);
     free(_path);
+
+    if (result) return error("Failed to update line!\n", NULL);
+    return 0;
     return update_nfs();
 }
 
@@ -145,10 +148,11 @@ int remove_nfs_recp(member* m, char* recipient) {
     char* path = build_nfs_path(m, &size);
     _recp = recipient;
 
-    int result = fops_update_line(exportsFile, path, _remove_nfs_recp);
+    int result = 0; //fops_update_line(exportsFile, path, _remove_nfs_recp);
     free(path);
 
     if (result) return error("Failed to update line!\n", NULL);
+    return 0;
     return update_nfs();
 }
 
@@ -162,7 +166,7 @@ int mount_nfs_dir(member* m) {
     sprintf(command, mountCmd, m->ip, path, m->id);
     printf("> %s\n", command);
 
-    int result = system(command);
+    int result = 0; // system(command);
 
     free(command);
     free(path);
@@ -184,7 +188,7 @@ int unmount_nfs_dir(member* m) {
 
     printf("> %s\n", command);
 
-    int result = system(command);
+    int result = 0; //system(command);
 
     free(command);
     free(path);
