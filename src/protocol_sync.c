@@ -224,6 +224,12 @@ static int send_lhie_sync_rep(member* memb) {
 
     if (message_complete == NULL) return error("Failed to build message: No memory!\n", NULL);
 
+    for (int i = 0; i < size; ++i) {
+        if (!isprint(message_complete[i])) printf("\\%d", message_complete[i]);
+        else printf("%c", message_complete[i]);
+    }
+    printf("\n\n");
+
     printf("# Sent Logical Hierarchy Sync Reply to %s\n", memb->id);
     return server_send(memb->ip, memb->port, message_complete, size);
 

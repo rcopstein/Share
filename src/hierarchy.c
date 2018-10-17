@@ -78,9 +78,9 @@ static void split_ext(char* name, char** extension) {
     (*extension)++;
 
 }
-static void print_tree(int level, HierarchyNode* root) {
+static int print_tree(int level, HierarchyNode* root) {
 
-    if (root == NULL) return;
+    if (root == NULL) return 0;
     for (int i = 0; i < level; ++i) printf("\t");
 
     if (root->conflict_free) printf("%s %s\n", root->file->name, root->file->owner);
@@ -90,8 +90,10 @@ static void print_tree(int level, HierarchyNode* root) {
         free(name);
     }
 
-    print_tree(level+1, root->child);
-    print_tree(level, root->next);
+    int count = 1;
+    count += print_tree(level+1, root->child);
+    count += print_tree(level, root->next);
+    return count;
 
 }
 
@@ -287,7 +289,7 @@ static HierarchyNode** _hn_get(HierarchyNode** from, char* name, char* owner) {
 
     while (*aux != NULL) {
         if (name == NULL || !strcmp((*aux)->file->name, name)) {
-            if (owner == NULL || !strcmp((*aux)->file->owner, owner)) {
+            if (owner == NULL || ((*aux)->file->owner != NULL && !strcmp((*aux)->file->owner, owner))) {
                 break;
             }
         }
@@ -573,7 +575,7 @@ int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
         for (i = 0; i < quant; ++i) {
             if (*node != NULL) {
                 member *m = get_certain_member((*node)->file->owner);
-                if (m == NULL || member_get_state(m, AVAIL)) {
+                if (m == NULL || member_get_state(m, AVAIL) || true) { // Testing without filtering
                     (*conflicts)[index] = (*node)->conflict_free ? 0 : 1;
                     (*files)[index] = (*node)->file;
                     ++index;
@@ -627,12 +629,6 @@ size_t _lf_serialize(char **buffer, LogicalFile *file) {
         aux += serialize_string(aux, file->realpath, (uint16_t) strlen(file->realpath)); // Serialize Realpath
     }
 
-    for (int i = 0; i < size; ++i) {
-        if (!isprint((*buffer)[i])) printf("\\%d", (*buffer)[i]);
-        else printf("%c", (*buffer)[i]);
-    }
-    printf("\n\n");
-
     return size;
 
 }
@@ -644,7 +640,7 @@ size_t _lf_deserialize(char *buffer, LogicalFile **file) {
     size_t total_size = 0;
 
     size = deserialize_string(buffer, &(*file)->name);
-    total_size += size - sizeof(uint16_t);
+    total_size += size;
     buffer += size;
 
     memcpy(&(*file)->isDir, buffer, sizeof(uint8_t)); // Read is directory
@@ -654,11 +650,11 @@ size_t _lf_deserialize(char *buffer, LogicalFile **file) {
     if (!(*file)->isDir) {
 
         size = deserialize_string(buffer, &(*file)->owner);
-        total_size += size - sizeof(uint16_t);
+        total_size += size;
         buffer += size;
 
         size = deserialize_string(buffer, &(*file)->realpath);
-        total_size += size - sizeof(uint16_t);
+        total_size += size;
         buffer += size;
 
     } else {
@@ -786,7 +782,7 @@ void _lf_sync_message(char* message, char* from, uint16_t seq_num) {
     _lf_sync_level(root, &message, from, level, seq_num);
     cleanup(root, &root->child, from, seq_num);
 
-    print_tree(0, root);
+    printf("%d\n", print_tree(0, root));
     post_semaphore();
 }
 

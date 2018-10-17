@@ -68,11 +68,32 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
     }
     else {
 
-        char* realpath = resolve_path(file);
-        int result = lstat(realpath, stbuf);
+        bool error = false;
 
-        if (result == -1) { error("Didn't find %s\n", (void *) path); free(realpath); return -errno; }
-        free(realpath);
+        member* owner = get_certain_member(file->owner);
+        if (owner != NULL && !member_get_state(owner, AVAIL)) error = true;
+        else {
+
+            char* realpath = resolve_path(file);
+            int result = lstat(realpath, stbuf);
+
+            if (result == -1) { error = true; }
+            free(realpath);
+
+        }
+
+        if (error) {
+
+            stbuf->st_size = 0;
+            stbuf->st_uid = mount_uid; // The owner of the file/directory is the user who mounted the filesystem
+            stbuf->st_gid = mount_gid; // The group of the file/directory is the same as the group of the user who mounted the filesystem
+            stbuf->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
+            stbuf->st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
+
+            stbuf->st_mode = S_IFREG | 0444;
+            stbuf->st_nlink = (nlink_t)(1);
+
+        }
 
 #if FUSE_VERSION >= 29
         stbuf->st_blksize = 0;
@@ -204,6 +225,9 @@ static int loopback_rename(const char *from, const char *to)
 
 static int loopback_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
+    // I assume that if I return an EEXIST error, the OS will attempt to getattr of it...
+    // If it doesn't work, it will try again, leading to a loop until I can sync...
+
     (void) mode;
 
     char* _path = (char *) malloc(strlen(path) + 1); // Copy path so we don't mess with params
