@@ -103,7 +103,7 @@ static void* loop(void* _bg) {
 
         check_connection(m);
         check_mount(m);
-        sleep(10);
+        sleep(1);
 
     }
 

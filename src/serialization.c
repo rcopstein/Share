@@ -1,7 +1,16 @@
 #include <string.h>
 #include <stdlib.h>
+#include <printf.h>
 
 #include "serialization.h"
+
+void mmemcpy(void * dst, void * src, size_t size) {
+
+    memcpy(dst, src, size);
+    ((char *)dst)[size - 1] = '\0';
+    printf("Copied: %s\n", (char *) dst);
+
+}
 
 uint16_t sizeof_string(char* string) {
 

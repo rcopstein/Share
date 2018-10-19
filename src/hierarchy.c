@@ -815,7 +815,7 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
         // them
 
         int i;
-        for (i = 0; *message_size < offset + node_size + sizeof(uint16_t); ++i) *message_size = *message_size * 2;
+        for (i = 0; *message_size < offset + node_size; ++i) *message_size = *message_size * 2;
         if (i) {
             *buffer = realloc(*buffer, *message_size);
             if (*buffer == NULL) { errno = ENOMEM; return 0; }
@@ -851,16 +851,21 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
     memcpy(message + offset, prefix, prefix_size);
     offset += prefix_size;
 
+    wait_semaphore();
+
     // Copy Sequence Number
     memcpy(message + offset, &seq_num, sizeof(seq_num));
     offset += sizeof(seq_num);
 
-    wait_semaphore();
-
     // Copy Files/Folders into buffer
     *size = copy_member_buffer(1, &message, offset, &message_size, root->child);
-    if (*size == 0) { free(message); message = NULL; }
+    if (*size >= message_size) printf("> Message overflow\n");
+
+    if (*size == 0) {
+        free(message); message = NULL;
+    }
     else {
+        if (message_size - (*size) < sizeof(uint16_t)) message = realloc(message, (*size) + sizeof(uint16_t));
         memcpy(message + *size, &terminator, sizeof(uint16_t));
         *size += sizeof(uint16_t);
 
