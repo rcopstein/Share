@@ -28,7 +28,7 @@ typedef struct _HierarchyNode {
 
 // Sequence Number
 static uint16_t seq_num = 0;
-static semaphore* seq_num_sem;
+static semaphore* seq_num_sem = NULL;
 
 uint16_t get_lhier_seq_num() {
 
@@ -81,12 +81,12 @@ static void split_ext(char* name, char** extension) {
 static int print_tree(int level, HierarchyNode* root) {
 
     if (root == NULL) return 0;
-    for (int i = 0; i < level; ++i) printf("\t");
+    // for (int i = 0; i < level; ++i) printf("\t");
 
-    if (root->conflict_free) printf("%s %s\n", root->file->name, root->file->owner);
+    if (root->conflict_free) {}// printf("%s %s\n", root->file->name, root->file->owner);
     else {
         char* name = resolved_name(root->file);
-        printf("%s %s\n", name, root->file->owner);
+        // printf("%s %s\n", name, root->file->owner);
         free(name);
     }
 
@@ -718,7 +718,7 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     // The current file doesn't exist anymore
     else {
 
-        // printf("Removed file %s\n", (*current)->file->name);
+        printf("Removed file %s\n", (*current)->file->name);
 
         HierarchyNode* to_free = *current;
         _hn_rem(parent, current);
@@ -782,7 +782,7 @@ void _lf_sync_message(char* message, char* from, uint16_t seq_num) {
     _lf_sync_level(root, &message, from, level, seq_num);
     cleanup(root, &root->child, from, seq_num);
 
-    printf("%d\n", print_tree(0, root));
+    printf("Hierarchy Size: %d\n", print_tree(0, root));
     post_semaphore();
 }
 

@@ -232,8 +232,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
         // printf("Creating %s/%s at %s with size %zu\n", path, name, npath, strlen(npath));
 
         become_user();
-        // res = open(npath, flags, 0755); TODO: Undo this
-        res = 0;
+        res = open(npath, flags, 0755);
         become_root();
 
     }
@@ -241,7 +240,7 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
 
     if (res == -1) send_freq_rep_add(NULL, 0, errno, socket);
     else {
-        // close(res); TODO: Undo this
+        close(res);
         if (_lf_add(file, path, true)) { remove(npath); send_freq_rep_add(NULL, 0, ENOENT, socket); }
         else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), 0, socket); }
     }

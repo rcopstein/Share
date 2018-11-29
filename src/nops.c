@@ -18,8 +18,10 @@
 
 int nops_read_message(int conn, void** buffer, size_t * size) {
 
-    uint16_t msg_size;
-    ssize_t result = recv(conn, &msg_size, sizeof(uint16_t), 0);
+    uint32_t msg_size;
+    ssize_t result = recv(conn, &msg_size, sizeof(uint32_t), 0);
+
+    // printf("Received %d bytes!\n", msg_size);
 
     if (result == 0) return NOPS_DISCONNECTED;
     else if (result < 0) return NOPS_FAILURE;
@@ -41,13 +43,15 @@ int nops_read_message(int conn, void** buffer, size_t * size) {
 
 int nops_send_message(int conn, void* content, size_t size) {
 
-    void* message = malloc(size + sizeof(uint16_t));
-    uint16_t* message_content = (uint16_t *)message + 1;
+    // printf("Sent %lu bytes!\n", size);
 
-    memcpy(message, &size, sizeof(uint16_t));
+    void* message = malloc(size + sizeof(uint32_t));
+    uint32_t* message_content = (uint32_t *)message + 1;
+
+    memcpy(message, &size, sizeof(uint32_t));
     memcpy(message_content, content, size);
 
-    size_t message_size = size + sizeof(uint16_t);
+    size_t message_size = size + sizeof(uint32_t);
     ssize_t result = send(conn, message, message_size, 0);
 
     free(message);

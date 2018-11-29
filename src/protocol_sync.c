@@ -9,6 +9,7 @@
 #include "output.h"
 #include "server.h"
 
+static semaphore* lhie_mutex = NULL;
 static const char protocol[] = "sync";
 static const uint8_t protocol_size = 4;
 
@@ -189,6 +190,23 @@ static void handle_sync_memb_req(char* message) {
 }
 
 // LOGICAL HIERARCHY
+static void lock_lhie_mutex() {
+
+    if (lhie_mutex == NULL) {
+        lhie_mutex = (semaphore *) malloc(sizeof(semaphore));
+        portable_sem_init(lhie_mutex, 1);
+    }
+
+    portable_sem_wait(lhie_mutex);
+
+}
+static void release_lhie_mutex() {
+
+    if (lhie_mutex == NULL) return;
+    portable_sem_post(lhie_mutex);
+
+}
+
 static int send_lhie_sync_rep(member* memb) {
 
     uint8_t rep = 1;
@@ -298,12 +316,21 @@ static void handle_sync_lhie_rep(char* message) {
     memcpy(&seq_num, message, sizeof(uint16_t));
     message += sizeof(uint16_t);
 
+    lock_lhie_mutex();
+
+    if (seq_num <= memb->lhier_clock) {
+        release_lhie_mutex();
+        free(id);
+        return;
+    }
+
     // Read All Files
     _lf_sync_message(message, memb->id, seq_num);
 
     memb->lhier_clock = seq_num;
     printf("%s's hierarchy sequence number is now %d\n", id, seq_num);
 
+    release_lhie_mutex();
     free(id);
 }
 static void handle_sync_lhie_req(char* message) {

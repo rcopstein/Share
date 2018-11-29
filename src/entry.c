@@ -86,25 +86,6 @@ int usage() {
     return 1;
 }
 
-
-// Test
-void test_sync_cases() {
-
-    for (int i = 0; i < 10000; ++i) {
-
-        char* name = (char *) malloc(32);
-        sprintf(name, "%d", i);
-
-        LogicalFile* file = create_lf(false, name, "1-1", "a");
-        _lf_add(file, "/", false);
-        free(name);
-
-    }
-    inc_lhier_seq_num();
-
-}
-
-
 // Initialize
 
 int initialize(char* id, char* ip, uint16_t port) {
@@ -288,9 +269,6 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
 
     // Send Join Request
     if (send_name_req(server_ip, server_port, get_current_member())) return clean_join(1);
-
-    // Test Sync Cases
-    test_sync_cases();
 
     // Wait for filesystem to finish operating
     mount_loop();
