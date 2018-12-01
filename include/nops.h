@@ -8,7 +8,7 @@
 #define NOPS_DISCONNECTED 1
 #define NOPS_FAILURE 2
 
-int nops_read_message(int conn, void** buffer, uint32_t * size);
+int nops_read_message(int conn, char** buffer, uint32_t * size);
 
 int nops_send_message(int conn, void* content, uint32_t size);
 

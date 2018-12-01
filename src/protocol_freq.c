@@ -73,7 +73,7 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
     int16_t result = (int16_t) nops_send_message(socket, message, (uint32_t) size);
     if (result != NOPS_SUCCESS) { printf("Result sending message %d\n", result); goto END; }
 
-    result = (int16_t) nops_read_message(socket, (void **) &message, (uint32_t *) &size);
+    result = (int16_t) nops_read_message(socket, &message, (uint32_t *) &size);
     if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
     memcpy(&result, message, sizeof(int16_t));
@@ -143,7 +143,7 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
     int16_t result = (int16_t) nops_send_message(socket, message, (uint32_t) size);
     if (result != NOPS_SUCCESS) { printf("Result sending message %d\n", result); goto END; }
 
-    result = (int16_t) nops_read_message(socket, (void **) &message, (uint32_t *) &size);
+    result = (int16_t) nops_read_message(socket, &message, (uint32_t *) &size);
     if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
     if (message[0] == '\0') {

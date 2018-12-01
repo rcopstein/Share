@@ -752,16 +752,12 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, char* owner, in
 
         if (file->isDir) {
 
-            printf("Dir %s/\n", file->name);
-
             HierarchyNode** folder = _hn_get(&parent->child, file->name, NULL);
             if (*folder == NULL) _hn_add(parent, folder, create_hn(file));
             next = folder;
 
         }
         else {
-
-            printf("\tFile %s\n", file->name);
 
             do {
 
