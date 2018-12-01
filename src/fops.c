@@ -60,7 +60,7 @@ int fops_exists_dir(const char* dirname) {
 
 int fops_make_dir(const char* dirname) {
 
-    if (!fops_exists_dir(dirname)) return error("Directory '%s' already exists!\n", (char *) dirname);
+    if (fops_exists_dir(dirname)) return error("Directory '%s' already exists!\n", (char *) dirname);
     return mkdir(dirname, 0700);
 
 }
