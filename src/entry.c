@@ -254,7 +254,13 @@ int join(char* server_ip, uint16_t server_port, char* client_ip, uint16_t client
     become_root();
 
     // Send Join Request
-    if (send_name_req(server_ip, server_port, get_current_member())) return clean_join(1);
+    int result;
+    if ((result = send_name_req(server_ip, server_port, get_current_member()))) {
+
+        if (result == 1) printf(RED "Remote server could not be found!\n" NRM);
+        else printf(RED "Failed to send name request. Aborting\n" NRM);
+        return clean_join(1);
+    }
 
     // Wait for filesystem to finish operating
     mount_loop();

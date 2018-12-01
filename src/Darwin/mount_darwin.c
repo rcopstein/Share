@@ -446,7 +446,6 @@ int mount_dir(char* mp) {
 int unmount_dir() {
     if (filesystem == NULL) return error("Failed to retrieve FUSE struct!\n", NULL);
     fuse_teardown(filesystem, mountpoint);
-    free(mountpoint);
     return 0;
 }
 
