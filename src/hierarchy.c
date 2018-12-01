@@ -271,8 +271,11 @@ static void _hn_add(HierarchyNode* parent, HierarchyNode** where, HierarchyNode*
     if (what->file->isDir) parent->folder_count++;
     else parent->file_count++;
 
-    if (*where != NULL) what->next = *where;
-    *where = what;
+    if (*where == NULL) *where = what;
+    else {
+        what->next = (*where)->next;
+        (*where)->next = what;
+    }
 
 }
 static void _hn_rem(HierarchyNode* parent, HierarchyNode** what) {
@@ -609,11 +612,10 @@ size_t _lf_size(LogicalFile *file) {
 }
 size_t _lf_serialize(char **buffer, LogicalFile *file) {
 
-    char* aux = *buffer;
     size_t size = _lf_size(file);
-
     if (*buffer == NULL) *buffer = (char *) malloc(size);
 
+    char* aux = *buffer;
     aux += serialize_string(aux, file->name, (uint16_t) strlen(file->name)); // Serialize Name
 
     memcpy(aux, &file->isDir, sizeof(uint8_t)); // Copy is directory
@@ -697,6 +699,9 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     if (*current == NULL) {
 
         // printf("Added new file %s\n", file->name);
+        if (strlen(file->name) < 1 || strlen(file->name) >= 7 || (strlen(file->name) > 1 && (file->name[0] < '1' || file->name[0] > '9'))) {
+            printf("### Added new file %s\n", file->name);
+        }
 
         HierarchyNode* new = create_hn(file);
 
@@ -718,7 +723,8 @@ static int _lf_sync_files(HierarchyNode *parent, HierarchyNode **current, Logica
     // The current file doesn't exist anymore
     else {
 
-        printf("Removed file %s\n", (*current)->file->name);
+        if (file != NULL) printf("Removed file %s because it didn't match %s\n", (*current)->file->name, file->name);
+        else printf("Removed file %s because the other is null\n", (*current)->file->name);
 
         HierarchyNode* to_free = *current;
         _hn_rem(parent, current);
@@ -746,12 +752,17 @@ static int _lf_sync_level(HierarchyNode* parent, char** message, char* owner, in
 
         if (file->isDir) {
 
+            printf("Dir %s/\n", file->name);
+
             HierarchyNode** folder = _hn_get(&parent->child, file->name, NULL);
             if (*folder == NULL) _hn_add(parent, folder, create_hn(file));
             next = folder;
 
         }
         else {
+
+            printf("\tFile %s\n", file->name);
+
             do {
 
                 if (*current != NULL) current = _hn_get(current, NULL, owner);
@@ -786,6 +797,9 @@ void _lf_sync_message(char* message, char* from, uint16_t seq_num) {
     post_semaphore();
 }
 
+int total_copied = 0;
+size_t max_offset_written = 0;
+
 static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, size_t* message_size, HierarchyNode* node) {
 
     if (node == NULL) return offset;
@@ -802,11 +816,13 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
     }
     else {
         size_t result = copy_member_buffer((uint16_t)(level + 1), buffer, new_offset, message_size, node->child);
-        if (result > new_offset) { res_offset = new_offset = result; should_write = true; }
+        if (result > new_offset) { res_offset = new_offset; new_offset = result; should_write = true; }
         if (result == 0) return 0;
     }
 
     if (should_write) {
+
+        total_copied++;
 
         // printf("Writing %s\n", node->file->name);
 
@@ -825,7 +841,13 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
         memcpy(where_to, &level, sizeof(uint16_t));
         where_to += sizeof(uint16_t);
 
+        if (offset < max_offset_written && !node->file->isDir) {
+            error("!!!!!!! Writing file before the max offset!\n", NULL);
+            printf("File is named %s\n", node->file->name);
+        }
+
         _lf_serialize(&where_to, node->file);
+        max_offset_written = new_offset;
 
         size_t result = copy_member_buffer(level, buffer, new_offset, message_size, node->next);
         if (result > res_offset) res_offset = result;
@@ -840,6 +862,9 @@ static size_t copy_member_buffer(uint16_t level, char** buffer, size_t offset, s
     return res_offset;
 }
 char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
+
+    total_copied = 0;
+    max_offset_written = 0;
 
     // Allocate initial buffer
     size_t offset = 0;
@@ -879,6 +904,8 @@ char* _lf_build_message(size_t prefix_size, char *prefix, size_t *size) {
         printf("\n\n");
          */
     }
+
+    printf("Copied %d files to message!\n", total_copied);
 
     post_semaphore();
 

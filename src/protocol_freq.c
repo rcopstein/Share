@@ -31,6 +31,11 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
     size += param2_size;
     size += type_size;
 
+    // Test the size being passed
+    if (size > UINT32_MAX) {
+        printf("!!! SIZE WILL OVERFLOW !!!");
+    }
+
     // Allocate Message
 
     char* message = (char *) malloc(sizeof(char) * size);
@@ -65,10 +70,10 @@ int send_freq_req(const char *type, member *m, char *param1, char *param2, int f
 
     // Send Message
 
-    int16_t result = (int16_t) nops_send_message(socket, message, size);
+    int16_t result = (int16_t) nops_send_message(socket, message, (uint32_t) size);
     if (result != NOPS_SUCCESS) { printf("Result sending message %d\n", result); goto END; }
 
-    result = (int16_t) nops_read_message(socket, (void **) &message, &size);
+    result = (int16_t) nops_read_message(socket, (void **) &message, (uint32_t *) &size);
     if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
     memcpy(&result, message, sizeof(int16_t));
@@ -95,6 +100,11 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
     size += param1_size;
     size += param2_size;
     size += type_size;
+
+    // Test the size being passed
+    if (size > UINT32_MAX) {
+        printf("!!! SIZE WILL OVERFLOW !!!");
+    }
 
     // Allocate Message
 
@@ -130,10 +140,10 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
 
     // Send Message
 
-    int16_t result = (int16_t) nops_send_message(socket, message, size);
+    int16_t result = (int16_t) nops_send_message(socket, message, (uint32_t) size);
     if (result != NOPS_SUCCESS) { printf("Result sending message %d\n", result); goto END; }
 
-    result = (int16_t) nops_read_message(socket, (void **) &message, &size);
+    result = (int16_t) nops_read_message(socket, (void **) &message, (uint32_t *) &size);
     if (result != NOPS_SUCCESS) { printf("Result receiving message %d\n", result); goto END; }
 
     if (message[0] == '\0') {

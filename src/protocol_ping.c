@@ -41,10 +41,9 @@ int send_ping(member* m) {
 
     uint16_t lhier_seq_num = get_lhier_seq_num(); // Copy Logical Hierarchy Sequence Number
     memcpy(aux, &lhier_seq_num, sizeof(uint16_t));
-    // aux += sizeof(uint16_t);
+    aux += sizeof(uint16_t);
 
     // Send Message
-    // printf("# Sent PING to %s\n", m->id);
     return server_send(m->ip, m->port, message, size);
 
 }

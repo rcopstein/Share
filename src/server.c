@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 
+#include "semaphores.h"
 #include "protocols.h"
 #include "output.h"
 #include "nops.h"
@@ -19,6 +20,8 @@ static int stop = 0;
 static uint16_t port;
 static int server_socket;
 static pthread_t server_thread = 0;
+
+static semaphore* sem = NULL;
 
 // Wait for the server to finish
 void server_wait() {
@@ -54,8 +57,6 @@ void* _server_start(void* vport) {
         return NULL;
     }
 
-    // printf("===\n");
-
     for (;;) {
 
         client_socket = accept(server_socket, (struct sockaddr*)&client, &socket_size);
@@ -63,7 +64,7 @@ void* _server_start(void* vport) {
 
         if (client_socket < 0) { error("Failed to accept connection\n", NULL); continue; }
 
-        size_t size = 0;
+        uint32_t size = 0;
         char* buffer = NULL;
         int result = nops_read_message(client_socket, (void**)&buffer, &size);
 
@@ -76,20 +77,28 @@ void* _server_start(void* vport) {
         }
 
 #ifdef _DEBUG_SERVER_MESSAGES
-        printf("\nSize is: '%zu'\n", size);
-        printf("# ");
+
+        if (sem == NULL) {
+            sem = (semaphore *) malloc(sizeof(semaphore));
+            portable_sem_init(sem, 1);
+        }
+        portable_sem_wait(sem);
+
+        printf("\nSize is: '%u'\n", size);
         for (int i = 0; i < size; ++i) {
             if (isprint(buffer[i])) printf("%c", buffer[i]);
             else printf("'%u'", buffer[i]);
         }
         printf("\n\n");
+
+        portable_sem_post(sem);
+
 #endif
 
         protocol_handle(buffer, size, client_socket);
         free(buffer);
 
         nops_close_connection(client_socket);
-        // printf("===\n");
     }
 
     nops_close_connection(server_socket);
@@ -112,22 +121,36 @@ int server_send(char* ip, uint16_t port, void* message, size_t size) {
     int sock = nops_open_connection(ip, port);
     if (sock < 0) return 1; // error("Failed to open connection!\n", NULL);
 
+    // Test the size being passed
+    if (size > UINT32_MAX) {
+        printf("!!! SIZE WILL OVERFLOW !!!");
+    }
+
     // Send the message
-    if (nops_send_message(sock, message, size)) {
+    if (nops_send_message(sock, message, (uint32_t) size)) {
         error("Failed to send message!\n", NULL);
         nops_close_connection(sock);
         return 1;
     }
 
 #ifdef _DEBUG_SERVER_MESSAGES
+
+    if (sem == NULL) {
+        sem = (semaphore *) malloc(sizeof(semaphore));
+        portable_sem_init(sem, 1);
+    }
+    portable_sem_wait(sem);
+
     char* buffer = (char *) message;
     printf("\nSent: ");
-    printf("# ");
     for (int i = 0; i < size; ++i) {
         if (isprint(buffer[i])) printf("%c", buffer[i]);
         else printf("'%u'", buffer[i]);
     }
     printf("\n\n");
+
+    portable_sem_post(sem);
+
 #endif
 
     nops_close_connection(sock);

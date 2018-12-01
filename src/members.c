@@ -15,7 +15,6 @@
 #include "output.h"
 #include "server.h"
 
-
 // Member struct
 typedef struct _mlist {
 
@@ -25,8 +24,6 @@ typedef struct _mlist {
 } mlist;
 
 // Variables
-static const char filepath[] = "metadata/members.txt";
-
 static int count = 0;
 static member* self = NULL;
 static mlist* members = NULL;
@@ -72,25 +69,6 @@ static member* copy_member(member* m) {
 }
 
 int initialize_metadata_members(member *m) {
-
-    /*
-    FILE* file;
-
-    if ((file = fopen(filepath, "wb+")) == NULL)
-        return error("Failed to open file '%s'!\n", (char *)filepath);
-
-    char* line = NULL;
-    size_t size = serialize_member(m, &line);
-    if (line == NULL) {
-        fclose(file);
-        remove(filepath);
-        return error("Failed to serialize member!\n", NULL);
-    }
-
-    fwrite(line, size, 1, file);
-    fclose(file);
-    free(line);
-     */
 
     count++;
     self = m;
@@ -243,7 +221,7 @@ int remove_metadata_members() {
     free_member(self);
     members = NULL;
 
-    return remove(filepath);
+    return 0;
 
 }
 
@@ -323,7 +301,7 @@ member* build_member(char* id, char* ip, uint16_t port, char* prefix) {
 
     member* result = (member *) malloc(sizeof(member));
 
-    strncpy(result->ip, ip, 15);
+    strncpy(result->ip, ip, 16);
     result->port = port;
 
     result->id_size = (uint16_t)(strlen(id) * sizeof(char));

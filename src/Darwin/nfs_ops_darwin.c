@@ -71,11 +71,10 @@ int add_nfs_recp(member* m, char* recipient) {
     _path = build_nfs_path(m, &size);
     _ip = recipient;
 
-    int result = 0; // fops_update_line(exportsFile, _path, _add_nfs_recp);
+    int result = fops_update_line(exportsFile, _path, _add_nfs_recp);
     free(_path);
 
     if (result) return error("Failed to update line!\n", NULL);
-    return 0;
     return update_nfs();
 }
 
@@ -148,11 +147,10 @@ int remove_nfs_recp(member* m, char* recipient) {
     char* path = build_nfs_path(m, &size);
     _recp = recipient;
 
-    int result = 0; //fops_update_line(exportsFile, path, _remove_nfs_recp);
+    int result = fops_update_line(exportsFile, path, _remove_nfs_recp);
     free(path);
 
     if (result) return error("Failed to update line!\n", NULL);
-    return 0;
     return update_nfs();
 }
 

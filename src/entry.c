@@ -23,8 +23,6 @@
 #include "background.h"
 #include "system.h"
 
-const char METADATA_DIR[] = "metadata/";
-
 // Auxiliary
 
 uid_t read_uid(char* param) {
@@ -94,16 +92,9 @@ int initialize(char* id, char* ip, uint16_t port) {
     char* pwd = realpath(".", NULL);
     m = build_member(id, ip, port, pwd);
 
-    if (fops_make_dir(METADATA_DIR)) {
-        free(pwd);
-        free_member(m);
-        return error("Failed to create metadata folder!\n", NULL);
-    }
-
     if (initialize_metadata_members(m)) {
         free(pwd);
         free_member(m);
-        fops_remove_dir(METADATA_DIR);
         return error("Failed to initialize metadata members!\n", NULL);
     }
 
@@ -111,7 +102,6 @@ int initialize(char* id, char* ip, uint16_t port) {
         free(pwd);
         free_member(m);
         remove_metadata_members();
-        fops_remove_dir(METADATA_DIR);
         return error("Failed to start the server!\n", NULL);
     }
 
@@ -119,7 +109,6 @@ int initialize(char* id, char* ip, uint16_t port) {
     return 0;
 
 }
-
 
 // Create
 
@@ -131,7 +120,6 @@ int clean_create(int level, char* nfs) {
         case 0:
             server_stop();
             remove_metadata_members();
-            fops_remove_dir(METADATA_DIR);
             break;
         default:
             break;
@@ -234,7 +222,6 @@ int parse_create(int argc, char** argv) {
     return create(ip, port, mountpoint);
 }
 
-
 // Join
 
 int clean_join(int level) {
@@ -245,7 +232,6 @@ int clean_join(int level) {
         case 0:
             server_stop();
             remove_metadata_members();
-            fops_remove_dir(METADATA_DIR);
         default:
             break;
     }
@@ -362,30 +348,9 @@ int parse_join(int argc, char** argv) {
     return join(server, server_port, client, client_port, mountpoint);
 }
 
-
 // Main
 
-// TODO: Make function for recover
-
 int main(int argc, char** argv) {
-
-    /*
-    LogicalFile* lf1 = create_lf(false, "a.txt", "1", "r.txt");
-    LogicalFile* lf2 = create_lf(false, "b.txt", "1", "r.txt");
-    LogicalFile* lf3 = create_lf(false, "c.txt", "1", "r.txt");
-
-    add_lf(lf1, "/A", true);
-    add_lf(lf2, "/B", true);
-    add_lf(lf3, "/C", true);
-
-    size_t size;
-    _lf_build_message(0, NULL, &size);
-    printf("Message size: %zu\n", size);
-    return 0;
-
-    test();
-    return 0;
-     */
 
     // Check for minimum number of arguments
     if (argc < 2) return usage();
