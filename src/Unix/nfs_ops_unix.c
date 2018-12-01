@@ -15,6 +15,17 @@ static const char  unmountCmd[] = "sudo umount %s:%s";
 static const char    mountCmd[] = "sudo mount -t nfs %s:%s %s/";
 static const char     options[] = "%s %s(rw,sync,no_subtree_check,insecure,all_squash,anonuid=%d,anongid=%d)\n";
 
+bool isIPwithParenthesis(const char *pre, const char *str)
+{
+    size_t lenpre = strlen(pre);
+    size_t lenstr = strlen(str);
+
+    if (lenstr < lenpre - 1) return false;
+    if (strncmp(pre, str, lenpre) != 0) return false;
+
+    return str[lenpre] == '(';
+}
+
 // Set user permissions
 static int num_chars(int num) {
 
@@ -117,7 +128,7 @@ int check_nfs_recp(member* m, char* recipient) {
     char* token = strsep(&aux, " ");
 
     while (token != NULL) {
-        if (!strncmp(token, recipient, strlen(recipient))) { found = true; break; }
+        if (isIPwithParenthesis(recipient, token)) { found = true; break; }
         token = strsep(&aux, " ");
     }
 
