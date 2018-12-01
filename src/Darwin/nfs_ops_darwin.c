@@ -164,7 +164,7 @@ int mount_nfs_dir(member* m) {
     sprintf(command, mountCmd, m->ip, path, m->id);
     printf("> %s\n", command);
 
-    int result = 0; // system(command);
+    int result = system(command);
 
     free(command);
     free(path);
@@ -186,7 +186,7 @@ int unmount_nfs_dir(member* m) {
 
     printf("> %s\n", command);
 
-    int result = 0; //system(command);
+    int result = system(command);
 
     free(command);
     free(path);
