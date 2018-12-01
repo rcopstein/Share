@@ -53,7 +53,7 @@ static int loopback_getattr(const char *path, struct stat *stbuf)
     LogicalFile* file;
     int err = _lf_get((char *) path, &file);
     if (err != 0) { /* error("Didn't find %s\n", (void *) path);*/ return -err; }
-    printf("Realpath for %s is %s\n", path, file->realpath);
+    // printf("Realpath for %s is %s\n", path, file->realpath);
 
     if (file->isDir) {
 

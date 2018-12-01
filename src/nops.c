@@ -16,7 +16,7 @@
 #include "output.h"
 #include "nops.h"
 
-int nops_read_message(int conn, void** buffer, uint32_t * size) {
+int nops_read_message(int conn, char** buffer, uint32_t * size) {
 
     uint32_t msg_size;
     ssize_t result = recv(conn, &msg_size, sizeof(uint32_t), 0);
@@ -31,10 +31,21 @@ int nops_read_message(int conn, void** buffer, uint32_t * size) {
 
     if (*buffer == NULL) return NOPS_FAILURE;
 
-    result = recv(conn, *buffer, msg_size, 0);
+    // Read until we have received the entire message
 
-    if (result == 0) return NOPS_DISCONNECTED;
-    else if (result < 0) return NOPS_FAILURE;
+    size_t bytes_read = 0;
+    while (bytes_read < msg_size) {
+
+        result = recv(conn, *buffer + bytes_read, msg_size - bytes_read, 0);
+
+        if (result == 0) return NOPS_DISCONNECTED;
+        else if (result < 0) return NOPS_FAILURE;
+
+        bytes_read += result;
+
+    }
+
+    if (msg_size > 50) printf("Expected message size was %d. Read %lu\n", msg_size, bytes_read);
 
     return NOPS_SUCCESS;
 }

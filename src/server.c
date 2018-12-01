@@ -66,7 +66,7 @@ void* _server_start(void* vport) {
 
         uint32_t size = 0;
         char* buffer = NULL;
-        int result = nops_read_message(client_socket, (void**)&buffer, &size);
+        int result = nops_read_message(client_socket, &buffer, &size);
 
         if (result == NOPS_DISCONNECTED) {
             warning("Socket disconnected!\n", NULL);
