@@ -578,7 +578,7 @@ int _lf_list(const char* where, LogicalFile*** files, int** conflicts) {
         for (i = 0; i < quant; ++i) {
             if (*node != NULL) {
                 member *m = get_certain_member((*node)->file->owner);
-                if (m == NULL || member_get_state(m, AVAIL) || true) { // Testing without filtering
+                if (m == NULL || member_get_state(m, AVAIL)) {
                     (*conflicts)[index] = (*node)->conflict_free ? 0 : 1;
                     (*files)[index] = (*node)->file;
                     ++index;
