@@ -96,6 +96,7 @@ void handle_mont_req(char *message) {
         // Add NFS recipient
         if (add_nfs_recp(get_current_member(), m->ip)) {
             warning("Failed to add NFS recipient '%s'\n", m->ip);
+            remove_nfs_recp(get_current_member(), m->ip);
             return;
         }
 
