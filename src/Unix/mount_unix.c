@@ -12,9 +12,9 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
-#include <sys/attr.h>
+// #include <sys/attr.h>
 #include <sys/param.h>
-#include <sys/vnode.h>
+// #include <sys/vnode.h>
 #include <pthread.h>
 #include <system.h>
 
