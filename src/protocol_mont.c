@@ -127,9 +127,13 @@ void handle_mont_rep(char *message) {
     if (!(m->state & MOUNT)) {
 
         // Attempt to create folder
-        become_user();
-        int res = fops_make_dir(m->id);
-        become_root();
+        int res = 0;
+
+        if (!fops_exists_dir(m->id)) {
+            become_user();
+            res = fops_make_dir(m->id);
+            become_root();
+        }
 
         if (res) {
             warning("Failed to create folder for %s\n", m->id);

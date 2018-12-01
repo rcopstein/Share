@@ -50,14 +50,19 @@ static int lock_file(int file, short type) {
 
 // Methods
 
-int fops_make_dir(const char* dirname) {
+int fops_exists_dir(const char* dirname) {
 
     struct stat st;
-    if (!stat(dirname, &st) || errno != ENOENT) {
-        return error("Directory '%s' already exists!\n", (char *) dirname);
-    }
+    if (!stat(dirname, &st) || errno != ENOENT) return 1;
+    return 0;
 
+}
+
+int fops_make_dir(const char* dirname) {
+
+    if (!fops_exists_dir(dirname)) return error("Directory '%s' already exists!\n", (char *) dirname);
     return mkdir(dirname, 0700);
+
 }
 
 int fops_remove_dir(const char* dirname) {
