@@ -16,12 +16,10 @@
 #include "output.h"
 #include "nops.h"
 
-int nops_read_message(int conn, void** buffer, size_t * size) {
+int nops_read_message(int conn, void** buffer, uint32_t * size) {
 
     uint32_t msg_size;
     ssize_t result = recv(conn, &msg_size, sizeof(uint32_t), 0);
-
-    // printf("Received %d bytes!\n", msg_size);
 
     if (result == 0) return NOPS_DISCONNECTED;
     else if (result < 0) return NOPS_FAILURE;
@@ -41,12 +39,10 @@ int nops_read_message(int conn, void** buffer, size_t * size) {
     return NOPS_SUCCESS;
 }
 
-int nops_send_message(int conn, void* content, size_t size) {
+int nops_send_message(int conn, void* content, uint32_t size) {
 
-    // printf("Sent %lu bytes!\n", size);
-
-    void* message = malloc(size + sizeof(uint32_t));
-    uint32_t* message_content = (uint32_t *)message + 1;
+    uint32_t * message = (uint32_t *) malloc(size + sizeof(uint32_t));
+    uint32_t * message_content = message + 1;
 
     memcpy(message, &size, sizeof(uint32_t));
     memcpy(message_content, content, size);
