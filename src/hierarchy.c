@@ -379,6 +379,82 @@ static int _lf_conf_rem(HierarchyNode* parent, char* name) {
 }
 
 
+// Folder Removal
+static int _count_available(HierarchyNode* node) {
+
+    if (node == NULL) return 0;
+
+    int count = 0;
+    if (!node->file->isDir) {
+        member *m = get_certain_member(node->file->owner);
+        if (m != NULL && member_get_state(m, AVAIL)) ++count;
+    }
+    else count += 1;
+
+    return count + _count_available(node->next);
+
+}
+static void _remove_all(HierarchyNode** node) {
+
+    HierarchyNode* aux = NULL;
+
+    while (*node != NULL) {
+
+        aux = *node;
+        *node = (*node)->next;
+        free_hn(aux);
+
+    }
+
+}
+
+static int _dir_rem_rec(HierarchyNode* parent, char* where) {
+
+    char* segment = get_segment(&where);
+
+    if (segment == NULL) {
+
+        if (parent == root) return EPERM;
+
+        int available = _count_available(parent->child);
+        if (available > 0) return ENOTEMPTY;
+        _remove_all(&parent->child);
+        return -1;
+
+    }
+    else {
+
+        HierarchyNode** next = _hn_get(&parent->child, segment, NULL);
+        if (*next == NULL || !(*next)->file->isDir) return ENOENT;
+        int res = _dir_rem_rec(*next, where);
+
+        if (res == -1) {
+
+            HierarchyNode* aux = *next;
+            _hn_rem(parent, next);
+            free_hn(aux);
+            res = 0;
+
+        }
+        return res;
+
+    }
+
+}
+int _dir_rem(const char* where) {
+
+    char* _where = (char *) malloc(sizeof(char) * (strlen(where) + 1));
+    strcpy(_where, where);
+
+    wait_semaphore();
+    int res = _dir_rem_rec(root, _where);
+    post_semaphore();
+
+    free(_where);
+    return res;
+
+}
+
 // File Management
 static int _lf_add_rec(HierarchyNode* parent, LogicalFile* what, char* where, bool create) {
 

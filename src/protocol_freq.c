@@ -102,9 +102,7 @@ int send_freq_req_add(member *m, char *path, char *name, int flags) {
     size += type_size;
 
     // Test the size being passed
-    if (size > UINT32_MAX) {
-        printf("!!! SIZE WILL OVERFLOW !!!");
-    }
+    if (size > UINT32_MAX) { printf("!!! SIZE WILL OVERFLOW !!!"); }
 
     // Allocate Message
 

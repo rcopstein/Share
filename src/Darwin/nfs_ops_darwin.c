@@ -12,7 +12,7 @@
 static const char definitionOptions[] = "-fspath=/";
 static const char       exportsFile[] = "/etc/exports";
 static const char        unmountCmd[] = "sudo umount -f %s:%s";
-static const char          mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport %s:%s %s/";
+static const char          mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport,timeo=1,retrans=3 %s:%s %s/";
 
 static char* root_perm = NULL;
 
@@ -160,14 +160,21 @@ int mount_nfs_dir(member* m) {
     size_t size;
     char* path = build_nfs_path(m, &size);
 
-    char* command = (char *) malloc(size + strlen(mountCmd) + m->id_size);
-    sprintf(command, mountCmd, m->ip, path, m->id);
-    printf("> %s\n", command);
+    size += strlen(mountCmd);
+    size += m->id_size;
+    size += 15;
 
+    char* command = (char *) malloc(size + 1);
+    sprintf(command, mountCmd, m->ip, path, m->id);
+    command[size] = '\0';
+
+    printf("> %lu %s\n", size, command);
     int result = system(command);
 
     free(command);
+    printf("Ping\n");
     free(path);
+    printf("Ping\n");
 
     return result;
 }
@@ -178,18 +185,18 @@ int unmount_nfs_dir(member* m) {
 
     size += strlen(unmountCmd) - 2; // Remove placeholder
     size += strlen(m->ip) - 2; // Remove Placeholder
-    size += 1; // Terminator
 
-    char* command = (char *) malloc(size);
+    char* command = (char *) malloc(size + 1);
     sprintf(command, unmountCmd, m->ip, path);
     command[size] = '\0';
 
-    printf("> %s\n", command);
-
+    printf("> %lu %s\n", size, command);
     int result = system(command);
 
     free(command);
+    printf("Ping\n");
     free(path);
+    printf("Ping\n");
 
     return result;
 

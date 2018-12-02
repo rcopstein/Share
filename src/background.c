@@ -71,7 +71,8 @@ static void check_connection(member* m) {
         member_unset_state(m, AVAIL);
 
         // Unmount Inactive Member
-        if (!unmount_nfs_dir(m)) member_unset_state(m, MOUNT);
+        unmount_nfs_dir(m);
+        member_unset_state(m, MOUNT);
     }
 
     // Check Reconnection

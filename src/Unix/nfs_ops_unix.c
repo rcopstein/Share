@@ -12,7 +12,7 @@
 
 static const char exportsFile[] = "/etc/exports";
 static const char  unmountCmd[] = "sudo umount %s:%s";
-static const char    mountCmd[] = "sudo mount -t nfs %s:%s %s/";
+static const char    mountCmd[] = "sudo mount -t nfs timeo=1,retrans=3 %s:%s %s/";
 static const char     options[] = "%s %s(rw,sync,no_subtree_check,insecure,all_squash,anonuid=%d,anongid=%d)\n";
 
 bool isIPwithParenthesis(const char *pre, const char *str)

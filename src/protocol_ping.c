@@ -62,14 +62,12 @@ void handle_ping_protocol(char* message) {
 
     // Find Member with ID
     member* m = get_certain_member(id);
-    free(id);
 
     if (m == NULL) {
         warning("Failed to find member with ID %s\n", id);
+        free(id);
         return;
-    }
-
-    // printf("# Received PING from %s\n", id);
+    } else free(id);
 
     // Update Member State
     m->avail = 0;

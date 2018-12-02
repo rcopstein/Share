@@ -35,6 +35,8 @@ void free_lf(LogicalFile* file);
 char* resolved_name(LogicalFile* file);
 
 // File Management
+int _dir_rem(const char* where);
+
 int _lf_add(LogicalFile* what, const char* where, bool create);
 int _lf_get(const char* where, LogicalFile** result);
 int _lf_rem(const char* where, bool remove_empty);
