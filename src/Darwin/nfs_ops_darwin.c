@@ -12,7 +12,7 @@
 static const char definitionOptions[] = "-fspath=/";
 static const char       exportsFile[] = "/etc/exports";
 static const char        unmountCmd[] = "sudo umount -f %s:%s";
-static const char          mountCmd[] = "sudo mount -t nfs -o retrycnt=0,resvport,timeo=1,retrans=3 %s:%s %s/";
+static const char          mountCmd[] = "sudo mount -t nfs -o soft,retrycnt=0,resvport,timeo=1,retrans=3 %s:%s %s/";
 
 static char* root_perm = NULL;
 
@@ -93,6 +93,8 @@ int check_nfs_recp(member* m, char* recipient) {
         return 1;
     }
 
+    printf("The line I read was %s\n", buffer);
+
     bool found = false;
     char* aux = buffer;
     char* token = strsep(&aux, " ");
@@ -172,9 +174,7 @@ int mount_nfs_dir(member* m) {
     int result = system(command);
 
     free(command);
-    printf("Ping\n");
     free(path);
-    printf("Ping\n");
 
     return result;
 }
@@ -194,9 +194,7 @@ int unmount_nfs_dir(member* m) {
     int result = system(command);
 
     free(command);
-    printf("Ping\n");
     free(path);
-    printf("Ping\n");
 
     return result;
 
@@ -215,6 +213,6 @@ static int num_chars(int num) {
 void set_root_perm(uid_t uid) {
 
     root_perm = (char *) malloc(sizeof(char) * (num_chars(uid) + 10));
-    sprintf(root_perm, "-maproot=%d", uid);
+    sprintf(root_perm, "-mapall=%d", uid);
 
 }

@@ -95,15 +95,18 @@ int fops_read_line(const char* filename, const char* prefix, char* buffer, size_
     int result = 1;
     int ack_lock = lock_file(fileno(file), F_RDLCK);
 
-    if (ack_lock > 0) {
-        while (getline(&buffer, &size, file)) {
+    if (ack_lock == 0) {
+        while (getline(&buffer, &size, file) > 0) {
+
+            printf("Line: %s\n", buffer);
+
             if (matches(prefix, buffer)) {
                 result = 0;
                 break;
             }
         }
 
-    } else result = error("Failed to acquire lock!\n", NULL);
+    } else { result = -2; printf(RED "Failed to acquire lock! Error %d\n" NRM, errno); }
 
     fclose(file);
     return result;

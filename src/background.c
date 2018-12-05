@@ -144,6 +144,9 @@ void stop_background(member* m) {
     bg* item = get_bg(m->id);
     item->stop = 1;
 
+    wait_background(m);
+    rem_bg(m->id);
+
 }
 void wait_background(member* m) {
 

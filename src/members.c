@@ -128,6 +128,7 @@ void remove_member(char* id) {
         if (strcmp((*aux)->content->id, id) == 0) {
             mlist* m = *aux;
             *aux = (*aux)->next;
+            stop_background(m->content);
             inc_member_clock();
             _free_member(m);
             --count;
@@ -238,21 +239,26 @@ size_t serialize_member(member *param, char **buffer) {
 
     memcpy(aux, &(param->id_size), sizeof(uint16_t)); // Copy the ID size
     aux += sizeof(uint16_t);
+    printf("Serialize ID Size: %d\n", param->id_size);
 
     memcpy(aux, param->id, param->id_size); // Copy the ID
     aux += param->id_size;
+    printf("Serialize ID: %s\n", param->id);
 
     memcpy(aux, param->ip, 15 * sizeof(char)); // Copy the IP
     aux += 15 * sizeof(char);
+    printf("Serialize IP: %s\n", param->ip);
 
     memcpy(aux, &(param->port), sizeof(uint16_t)); // Copy the Port
     aux += sizeof(uint16_t);
+    printf("Serialize Port: %d\n", param->port);
 
     memcpy(aux, &(param->prefix_size), sizeof(uint16_t)); // Copy the prefix size
     aux += sizeof(uint16_t);
 
     memcpy(aux, param->prefix, param->prefix_size); // Copy the prefix
     //aux += param->prefix_size;
+    printf("Serialize Prefix: %s\n", param->prefix);
 
     return size;
 

@@ -238,6 +238,7 @@ static int loopback_create(const char *path, mode_t mode, struct fuse_file_info 
     member* assigned_owner = get_random_member();
     int res = send_freq_req_add(assigned_owner, _path, _name, fi->flags);
 
+    printf("File creation answer was %d\n", res);
     if (res > 0) { fi->fh = (uint64_t) res; res = 0; }
 
     free(_path);

@@ -472,13 +472,20 @@ static int _lf_add_rec(HierarchyNode* parent, LogicalFile* what, char* where, bo
         HierarchyNode** next = _hn_get(&parent->child, segment, NULL);
 
         if (*next == NULL) {
-            if (!create) return ENOENT;
+            if (!create) {
+                printf("Didn't find and can't create %s\n", segment);
+                return ENOENT;
+            }
 
             LogicalFile *file = create_lf(true, segment, NULL, NULL);
             _lf_add_rec(parent, file, NULL, false);
             next = _hn_get(&parent->child, segment, NULL); // I might not need this since we are adding it to the last element
+            printf("Created %s\n", segment);
         }
-        else if (!(*next)->file->isDir) return ENOENT;
+        else if (!(*next)->file->isDir) {
+            printf("%s is not a folder\n", segment);
+            return ENOENT;
+        }
 
         return _lf_add_rec(*next, what, where, create);
     }
@@ -617,7 +624,11 @@ int _lf_get(const char* where, LogicalFile** result) {
     int res = _hn_get_path(&parent, where);
     post_semaphore();
 
-    if (!res) *result = parent->file;
+    if (!res) {
+        res = ENOENT;
+        member* m = get_certain_member(parent->file->owner);
+        if (m != NULL && member_get_state(m, AVAIL)) { *result = parent->file; res = 0; }
+    }
     return res;
 
 }

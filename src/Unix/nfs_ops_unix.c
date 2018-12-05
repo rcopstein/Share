@@ -12,7 +12,7 @@
 
 static const char exportsFile[] = "/etc/exports";
 static const char  unmountCmd[] = "sudo umount %s:%s";
-static const char    mountCmd[] = "sudo mount -t nfs timeo=1,retrans=3 %s:%s %s/";
+static const char    mountCmd[] = "sudo mount -t nfs -o soft,timeo=1,retrans=3 %s:%s %s/";
 static const char     options[] = "%s %s(rw,sync,no_subtree_check,insecure,all_squash,anonuid=%d,anongid=%d)\n";
 
 bool isIPwithParenthesis(const char *pre, const char *str)
@@ -120,7 +120,7 @@ int check_nfs_recp(member* m, char* recipient) {
     if (res) {
         printf("Didn't find line starting with %s\n", path);
         free(buffer);
-        return 1;
+        return res;
     }
 
     bool found = false;
@@ -164,7 +164,7 @@ static char* _remove_nfs_recp(char* line) {
         token = strtok(NULL, " \n");
     }
 
-    if (count <= 2) {
+    if (count <= 1) {
         free(nline);
         return NULL;
     }

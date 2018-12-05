@@ -90,24 +90,30 @@ void handle_mont_req(char *message) {
         return;
     }
 
+    int result = check_nfs_recp(get_current_member(), m->ip);
+    if (result == -2) { printf("Failed to get lock, waiting to try again\n"); return; }
+
     // Check if member is a recipient
     if (!(m->state & RECP)) {
 
-        // Add NFS recipient
-        if (add_nfs_recp(get_current_member(), m->ip)) {
-            warning("Failed to add NFS recipient '%s'\n", m->ip);
-            remove_nfs_recp(get_current_member(), m->ip);
-            return;
+        // Member is not a recipient, add it
+        if (result) {
+            if (add_nfs_recp(get_current_member(), m->ip)) {
+                warning("Failed to add NFS recipient '%s'\n", m->ip);
+                remove_nfs_recp(get_current_member(), m->ip);
+                return;
+            }
         }
 
         member_set_state(m, RECP);
         printf("ADDED RECIPIENT '%s'\n", m->ip);
 
-    } else if (check_nfs_recp(get_current_member(), m->ip)) {
+    } else if (result) {
 
         warning("Found inconsistent NFS recipient state. Attempting to fix!\n", NULL);
         member_unset_state(m, RECP);
         return;
+
     }
 
     send_mont_rep(m);

@@ -237,20 +237,21 @@ void handle_freq_add(char *path, char *name, uint32_t flags, int socket) {
         file = create_lf(false, name, current->id, nname);
         npath = resolve_path(file);
 
-        // printf("Creating %s/%s at %s with size %zu\n", path, name, npath, strlen(npath));
+        printf("Creating %s/%s at %s with size %zu\n", path, name, npath, strlen(npath));
 
         become_user();
-        res = open(npath, flags, 0755);
+        res = open(npath, flags | O_CREAT | O_EXCL, 0755);
         become_root();
 
+        printf("Res is %d and errno is %d\n", res, errno);
     }
     while (res == -1 && errno == EEXIST);
 
     if (res == -1) send_freq_rep_add(NULL, 0, errno, socket);
     else {
         close(res);
-        if (_lf_add(file, path, true)) { remove(npath); send_freq_rep_add(NULL, 0, ENOENT, socket); }
-        else { inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), 0, socket); }
+        if (_lf_add(file, path, true)) { printf("Failed to add lf\n"); remove(npath); send_freq_rep_add(NULL, 0, ENOENT, socket); }
+        else { printf("Success!"); inc_lhier_seq_num(); send_freq_rep_add(nname, strlen(nname), 0, socket); }
     }
 
     free(npath);

@@ -38,6 +38,7 @@ int send_name_req(char *ip, uint16_t port, member *m) {
     serialize_member(m, &aux); // Copy member
 
     printf("# Sent Name Request to %s:%d\n", ip, port);
+
     return server_send(ip, port, message, size);
 
 }
@@ -97,7 +98,7 @@ void handle_name_req(char *message) {
 
     // Reply the request
     if (send_name_rep(m.ip, m.port, id, id_size, current)) {
-        error("Failed to send join reply!\n", NULL);
+        printf("Failed to send join reply!\n");
         fops_remove_dir(id);
         remove_member(m.id);
         return;
